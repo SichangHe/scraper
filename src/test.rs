@@ -4,7 +4,7 @@ use anyhow::Result;
 use reqwest::{Client, Url};
 use xxhash_rust::xxh3::xxh3_64;
 
-use crate::{schedule::Scheduler, scrape::Attempt};
+use crate::schedule::Scheduler;
 
 #[test]
 fn hash_test() {
@@ -34,16 +34,6 @@ async fn reqwest_test() -> Result<()> {
     println!("Headers: {headers:?}");
     let final_url = response.url();
     println!("Final URL: {final_url}");
-    Ok(())
-}
-
-#[tokio::test]
-async fn attempt_send_test() -> Result<()> {
-    let request = Client::new().get("https://www.rust-lang.org");
-    let mut attempt = Attempt::with_request(request);
-    attempt.run().await?;
-    attempt.finish().await?;
-    println!("{attempt:#?}");
     Ok(())
 }
 

@@ -1,52 +1,49 @@
-use anyhow::{Error, Result};
-use reqwest::{header::HeaderMap, RequestBuilder, Response, Url};
+use anyhow::Result;
+use bytes::Bytes;
+use reqwest::{header::HeaderMap, RequestBuilder, Url};
 use tokio::{spawn, task::JoinHandle};
 
-#[derive(Debug)]
-pub struct Attempt {
-    pub request: Option<RequestBuilder>,
-    pub response: Option<Response>,
-    handle: Option<JoinHandle<Result<(Response, Url, FileType)>>>,
+pub async fn scrape_with_new_thread(
+    url: Url,
+    request: RequestBuilder,
+) -> JoinHandle<Result<Conclusion>> {
+    spawn(process_request(url, request))
 }
 
-impl Attempt {
-    pub fn with_request(request: RequestBuilder) -> Self {
-        Self {
-            request: Some(request),
-            response: None,
-            handle: None,
-        }
-    }
-    pub async fn run(&mut self) -> Result<()> {
-        let request = self.request.take();
-        if let Some(request) = request {
-            self.handle = Some(spawn(process_request(request)));
-        } else {
-            return Err(Error::msg("No Request here."));
-        }
-        Ok(())
-    }
-
-    pub async fn finish(&mut self) -> Result<()> {
-        if self.handle.is_none() {
-            return Err(Error::msg("No handle."));
-        }
-        let handle = self.handle.take().unwrap();
-        let (response, final_url, file_type) = handle.await??;
-        self.response = Some(response);
-        Ok(())
-    }
-}
-
-async fn process_request(request: RequestBuilder) -> Result<(Response, Url, FileType)> {
+async fn process_request(url: Url, request: RequestBuilder) -> Result<Conclusion> {
     let response = request.send().await?;
     let final_url = response.url().to_owned();
+    let url_str = clean_url(&final_url);
     let headers = response.headers();
     let file_type = process_headers(headers)?;
-    Ok((response, final_url, file_type))
+    let extension;
+    let content;
+    if let FileType::Html = file_type {
+        extension = ".html".to_owned();
+        content = FileContent::Html(response.text().await?);
+    } else {
+        extension = ".".to_owned()
+            + url_str
+                .split('.')
+                .last()
+                .unwrap()
+                .split('/')
+                .last()
+                .unwrap();
+        content = FileContent::Other(response.bytes().await?);
+    }
+    Ok(Conclusion {
+        url,
+        final_url,
+        extension,
+        content,
+    })
 }
 
-#[derive(Debug)]
+fn clean_url(url: &Url) -> String {
+    url.to_string().split('#').next().unwrap().to_owned()
+}
+
 enum FileType {
     Html,
     Other,
@@ -62,4 +59,18 @@ fn process_headers(headers: &HeaderMap) -> Result<FileType> {
     } else {
         FileType::Other
     })
+}
+
+#[derive(Debug)]
+pub enum FileContent {
+    Html(String),
+    Other(Bytes),
+}
+
+#[derive(Debug)]
+pub struct Conclusion {
+    pub url: Url,
+    pub final_url: Url,
+    pub extension: String,
+    pub content: FileContent,
 }

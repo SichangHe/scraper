@@ -4,8 +4,9 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     time::Duration,
 };
+use tokio::task::JoinHandle;
 
-use crate::scrape::Attempt;
+use crate::scrape::{scrape_with_new_thread, Conclusion};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 const TIMEOUT_MULTIPLIER: u32 = 5;
@@ -13,26 +14,28 @@ const TIMEOUT_MULTIPLIER: u32 = 5;
 #[derive(Debug)]
 pub struct Scheduler {
     client: Client,
-    scrapers: Vec<Attempt>,
+    handles: Vec<JoinHandle<Result<Conclusion>>>,
     urls: BTreeMap<Url, usize>,
     url_ids: BTreeMap<usize, Url>,
     scrapes: BTreeSet<usize>,
     fails: BTreeSet<usize>,
     redirects: BTreeMap<usize, usize>,
     pending: VecDeque<usize>,
+    conclusions: Vec<Conclusion>,
 }
 
 impl Scheduler {
     pub fn from_client(client: Client) -> Self {
         Self {
             client,
-            scrapers: Vec::new(),
+            handles: Vec::new(),
             urls: BTreeMap::new(),
             url_ids: BTreeMap::new(),
             scrapes: BTreeSet::new(),
             fails: BTreeSet::new(),
             redirects: BTreeMap::new(),
             pending: VecDeque::new(),
+            conclusions: Vec::new(),
         }
     }
 
@@ -63,18 +66,14 @@ impl Scheduler {
             .pop_front()
             .ok_or_else(|| Error::msg("No pending URLs."))?;
         let url = self.url_ids.get(&url_id).unwrap().to_owned();
-        let mut attempt = Attempt::with_request(self.client.get(url));
-        attempt.run().await.map_err(|e| {
-            self.fail(url_id);
-            e
-        })?;
-        self.scrapers.push(attempt);
+        self.handles
+            .push(scrape_with_new_thread(url.clone(), self.client.get(url)).await);
         Ok(())
     }
 
     pub async fn finish(&mut self) -> Result<()> {
-        for attempt in &mut self.scrapers {
-            attempt.finish().await?;
+        for handle in &mut self.handles {
+            self.conclusions.push(handle.await??);
         }
         Ok(())
     }
