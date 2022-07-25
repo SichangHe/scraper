@@ -40,7 +40,7 @@ async fn reqwest_test() -> Result<()> {
 #[tokio::test]
 async fn scheduler_test() -> Result<()> {
     let mut scheduler = Scheduler::from_client(Scheduler::default_client()?);
-    scheduler.add_url(Url::parse("https://www.rust-lang.org")?);
+    scheduler.add_pending(Url::parse("https://www.rust-lang.org")?);
     scheduler.launch_scraper().await?;
     scheduler.finish().await?;
     println!("{scheduler:#?}");
