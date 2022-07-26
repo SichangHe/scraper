@@ -7,7 +7,10 @@ use std::{
 };
 use tokio::task::JoinHandle;
 
-use crate::scrape::{scrape_with_new_thread, Conclusion, FileContent};
+use crate::{
+    io::save_file,
+    scrape::{scrape_with_new_thread, Conclusion, FileContent},
+};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 const TIMEOUT_MULTIPLIER: u32 = 5;
@@ -180,8 +183,4 @@ impl Scheduler {
         self.fails.insert(url_id);
         self.pending.push_back(url_id);
     }
-}
-
-async fn save_file(name: &str, bytes: &[u8]) -> Result<()> {
-    todo!()
 }

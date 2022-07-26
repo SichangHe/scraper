@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Ok, Result};
 use reqwest::{Client, Url};
 use xxhash_rust::xxh3::xxh3_64;
 
-use crate::schedule::Scheduler;
+use crate::{io::save_file, schedule::Scheduler};
 
 #[test]
 fn hash_test() {
@@ -61,5 +61,11 @@ async fn process_header_test() -> Result<()> {
         .split("; ")
         .collect::<Vec<_>>();
     println!("{headers:#?}\n{content_type:#?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn save_file_test() -> Result<()> {
+    save_file("dne/0.txt", b"hey").await?;
     Ok(())
 }
