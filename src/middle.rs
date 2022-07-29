@@ -31,14 +31,12 @@ async fn process_response(url_id: usize, response: Response) -> Result<Conclusio
     let url_str = clean_url(&final_url);
     let headers = response.headers();
     let file_type = process_headers(headers)?;
-    let extension;
     let content;
     if let FileType::Html = file_type {
-        extension = ".html".to_owned();
         let (text, hrefs, imgs) = links_from_html(&final_url, response.text().await?);
         content = FileContent::Html(text, hrefs, imgs);
     } else {
-        extension = ".".to_owned()
+        let extension = ".".to_owned()
             + url_str
                 .split('.')
                 .last()
@@ -46,13 +44,9 @@ async fn process_response(url_id: usize, response: Response) -> Result<Conclusio
                 .split('/')
                 .last()
                 .unwrap();
-        content = FileContent::Other(response.bytes().await?);
+        content = FileContent::Other(extension, response.bytes().await?);
     }
-    Ok(Conclusion {
-        url_id,
-        extension,
-        content,
-    })
+    Ok(Conclusion { url_id, content })
 }
 
 fn clean_url(url: &Url) -> String {
@@ -77,6 +71,5 @@ impl Process {
 #[derive(Debug)]
 pub struct Conclusion {
     pub url_id: usize,
-    pub extension: String,
     pub content: FileContent,
 }

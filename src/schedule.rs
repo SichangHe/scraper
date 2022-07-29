@@ -162,16 +162,14 @@ impl Scheduler {
                 return;
             }
         };
-        let Conclusion {
-            url_id,
-            extension,
-            content,
-        } = conclusion;
+        let Conclusion { url_id, content } = conclusion;
         match content {
             FileContent::Html(text, hrefs, imgs) => {
                 self.process_html(url_id, text, hrefs, imgs).await
             }
-            FileContent::Other(bytes) => self.process_other(url_id, &extension, bytes).await,
+            FileContent::Other(extension, bytes) => {
+                self.process_other(url_id, &extension, bytes).await
+            }
         }
         .unwrap_or_else(|err| {
             println!("{err}");

@@ -20,10 +20,15 @@ pub fn process_headers(headers: &HeaderMap) -> Result<FileType> {
     })
 }
 
+/// `Html(text: String, hrefs: Vec<Url>, imgs: Vec<Url>)`
+///
+/// or
+///
+/// `Other(extension: String, bytes: Bytes)`
 #[derive(Debug)]
 pub enum FileContent {
     Html(String, Vec<Url>, Vec<Url>),
-    Other(Bytes),
+    Other(String, Bytes),
 }
 
 pub fn links_from_html(url: &Url, str: String) -> (String, Vec<Url>, Vec<Url>) {
