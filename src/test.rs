@@ -113,6 +113,9 @@ fn record_serialize_test() -> Result<()> {
     record
         .check_add_url(Url::parse("https://sites.duke.edu/intersections/")?)
         .unwrap();
+        record.scrapes.insert(0);
+    record.fails.insert(2);
+    record.redirects.insert(3, 4);
     let toml = toml::to_string_pretty(&record)?;
     println!("{toml}");
     Ok(())

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use reqwest::{Response, Url};
-use serde::{ser::SerializeStruct, Serialize, Serializer};
+use serde::{ser::SerializeStruct, Serialize};
 
 #[derive(Debug, Default)]
 pub struct Record {
@@ -56,14 +56,14 @@ impl Serialize for Record {
         S: serde::Serializer,
     {
         let mut seq = serializer.serialize_struct("record", 4)?;
+        seq.serialize_field("scrapes", &self.scrapes)?;
+        seq.serialize_field("fails", &self.fails)?;
         let urls: BTreeMap<_, _> = self
             .urls
             .iter()
             .map(|(url, id)| (url.to_string(), id))
             .collect();
         seq.serialize_field("urls", &urls)?;
-        seq.serialize_field("scrapes", &self.scrapes)?;
-        // seq.serialize_field("fails", &self.fails)?;
         let redirects: BTreeMap<_, _> = self
             .redirects
             .iter()
