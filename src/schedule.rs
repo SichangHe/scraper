@@ -10,8 +10,7 @@ use tokio::time::sleep;
 use crate::{
     file::FileContent,
     io::save_file,
-    middle::{double_unwrap, Process, Request},
-    scrape::Conclusion,
+    middle::{double_unwrap, Conclusion, Process, Request},
 };
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -30,7 +29,7 @@ pub struct Scheduler {
     pending: VecDeque<usize>,
     requests: Vec<Request>,
     processes: Vec<Process>,
-    conclusions: Vec<(usize, Conclusion)>,
+    conclusions: Vec<Conclusion>,
 }
 
 impl Scheduler {
@@ -128,7 +127,7 @@ impl Scheduler {
         let Process { url_id, handle } = self.processes.remove(*index);
         *index = index.saturating_sub(1);
         match double_unwrap(handle).await {
-            Ok(conclusion) => self.conclusions.push((url_id, conclusion)),
+            Ok(conclusion) => self.conclusions.push(conclusion),
             Err(err) => {
                 println!("{err}");
                 self.fail(url_id);
@@ -155,7 +154,7 @@ impl Scheduler {
     }
 
     pub async fn process_one_conclusion(&mut self) {
-        let (url_id, conclusion) = {
+        let conclusion = {
             if let Some(conclusion) = self.conclusions.pop() {
                 conclusion
             } else {
@@ -164,7 +163,7 @@ impl Scheduler {
             }
         };
         let Conclusion {
-            final_url,
+            url_id,
             extension,
             content,
         } = conclusion;

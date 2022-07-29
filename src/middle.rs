@@ -2,10 +2,7 @@ use anyhow::Result;
 use reqwest::{RequestBuilder, Response, Url};
 use tokio::{spawn, task::JoinHandle};
 
-use crate::{
-    file::{links_from_html, process_headers, FileContent, FileType},
-    scrape::Conclusion,
-};
+use crate::file::{links_from_html, process_headers, FileContent, FileType};
 
 #[derive(Debug)]
 pub struct Request {
@@ -29,7 +26,7 @@ pub async fn double_unwrap<T>(handle: JoinHandle<Result<T>>) -> Result<T> {
     handle.await?
 }
 
-async fn process_response(response: Response) -> Result<Conclusion> {
+async fn process_response(url_id: usize, response: Response) -> Result<Conclusion> {
     let final_url = response.url().to_owned();
     let url_str = clean_url(&final_url);
     let headers = response.headers();
@@ -52,7 +49,7 @@ async fn process_response(response: Response) -> Result<Conclusion> {
         content = FileContent::Other(response.bytes().await?);
     }
     Ok(Conclusion {
-        final_url,
+        url_id,
         extension,
         content,
     })
@@ -72,7 +69,14 @@ impl Process {
     pub async fn spawn(url_id: usize, response: Response) -> Self {
         Self {
             url_id,
-            handle: spawn(process_response(response)),
+            handle: spawn(process_response(url_id, response)),
         }
     }
+}
+
+#[derive(Debug)]
+pub struct Conclusion {
+    pub url_id: usize,
+    pub extension: String,
+    pub content: FileContent,
 }
