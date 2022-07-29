@@ -1,11 +1,11 @@
-use anyhow::{Error, Result};
+use anyhow::Result;
 use bytes::Bytes;
 use reqwest::{Client, Response, Url};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     time::Duration,
 };
-use tokio::time::sleep;
+use tokio::time::{sleep, Instant};
 
 use crate::{
     file::FileContent,
@@ -13,6 +13,7 @@ use crate::{
     middle::{double_unwrap, Conclusion, Process, Request},
 };
 
+const DEFAULT_DELAY: Duration = Duration::from_millis(500);
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 const TIMEOUT_MULTIPLIER: u32 = 5;
 const HTML_DIR: &str = "html/";
@@ -20,6 +21,8 @@ const OTHER_DIR: &str = "other/";
 
 #[derive(Debug)]
 pub struct Scheduler {
+    time: Instant,
+    delay: Duration,
     client: Client,
     urls: BTreeMap<Url, usize>,
     url_ids: BTreeMap<usize, Url>,
@@ -35,6 +38,8 @@ pub struct Scheduler {
 impl Scheduler {
     pub fn from_client(client: Client) -> Self {
         Self {
+            time: Instant::now(),
+            delay: DEFAULT_DELAY,
             client,
             urls: BTreeMap::new(),
             url_ids: BTreeMap::new(),
@@ -78,15 +83,15 @@ impl Scheduler {
         Ok(index)
     }
 
-    pub async fn launch_scraper(&mut self) -> Result<()> {
-        let url_id = self
-            .pending
-            .pop_front()
-            .ok_or_else(|| Error::msg("No pending URLs."))?;
+    pub async fn spawn_one_request(&mut self) {
+        let url_id = match self.pending.pop_front() {
+            Some(url_id) => url_id,
+            None => return,
+        };
         let url = self.url_ids.get(&url_id).unwrap().to_owned();
+        println!("\tRequesting {url_id} | {url}.");
         self.requests
             .push(Request::spawn(url_id, self.client.get(url)).await);
-        Ok(())
     }
 
     pub async fn check_requests(&mut self) {
@@ -106,7 +111,7 @@ impl Scheduler {
         match double_unwrap(handle).await {
             Ok(response) => self.process_response(url_id, response).await,
             Err(err) => {
-                println!("{err}");
+                println!("{url_id}: {err}.");
                 self.fail(url_id);
             }
         };
@@ -129,7 +134,7 @@ impl Scheduler {
         match double_unwrap(handle).await {
             Ok(conclusion) => self.conclusions.push(conclusion),
             Err(err) => {
-                println!("{err}");
+                println!("{url_id}: {err}.");
                 self.fail(url_id);
             }
         }
@@ -140,17 +145,20 @@ impl Scheduler {
             Ok(final_url_id) => final_url_id,
             Err(final_url_id) => {
                 if url_id != final_url_id && self.scrapes.contains(&final_url_id) {
+                    println!("\t{url_id}: already scraped as {final_url_id}.");
                     return; // abort because scraped
                 }
                 final_url_id
             }
         };
         if url_id != final_url_id {
+            println!("\t{url_id} redirected to {url_id}.");
             self.redirects.insert(url_id, final_url_id);
         }
         self.scrapes.insert(final_url_id);
+        println!("\tProcessing {final_url_id}.");
         self.processes
-            .push(Process::spawn(final_url_id, response).await)
+            .push(Process::spawn(final_url_id, response).await);
     }
 
     pub async fn process_one_conclusion(&mut self) {
@@ -172,7 +180,7 @@ impl Scheduler {
             }
         }
         .unwrap_or_else(|err| {
-            println!("{err}");
+            println!("{url_id}: {err}.");
             self.fail(url_id);
         });
     }
@@ -197,6 +205,41 @@ impl Scheduler {
     async fn process_other(&mut self, url_id: usize, extension: &str, bytes: Bytes) -> Result<()> {
         save_file(&format!("{OTHER_DIR}{url_id}{extension}"), &bytes).await?;
         Ok(())
+    }
+
+    pub async fn recursion(&mut self) {
+        self.time = Instant::now();
+        while !self.pending.is_empty()
+            || !self.requests.is_empty()
+            || !self.processes.is_empty()
+            || !self.conclusions.is_empty()
+        {
+            self.one_cycle().await
+        }
+    }
+
+    async fn one_cycle(&mut self) {
+        self.check_spawn_request().await;
+        self.check_requests().await;
+        self.check_spawn_request().await;
+        self.check_processes().await;
+        self.check_spawn_request().await;
+        self.process_one_conclusion().await;
+        println!(
+            "\t{} pending, {} requests, {} processes, {} conclusions.",
+            self.pending.len(),
+            self.requests.len(),
+            self.processes.len(),
+            self.conclusions.len()
+        );
+        sleep(self.delay.saturating_sub(self.time.elapsed())).await;
+    }
+
+    async fn check_spawn_request(&mut self) {
+        if self.time.elapsed() >= self.delay && !self.pending.is_empty() {
+            self.spawn_one_request().await;
+            self.time += self.delay;
+        }
     }
 
     // Strictly for test.

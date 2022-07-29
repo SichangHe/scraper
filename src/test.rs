@@ -59,9 +59,17 @@ async fn request_test() -> Result<()> {
 async fn scheduler_test() -> Result<()> {
     let mut scheduler = Scheduler::from_client(Scheduler::default_client()?);
     scheduler.add_pending(Url::parse("https://www.rust-lang.org")?);
-    scheduler.launch_scraper().await?;
+    scheduler.spawn_one_request().await;
     scheduler.finish().await?;
     println!("{scheduler:#?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn scheduler_recursion_test() -> Result<()> {
+    let mut scheduler = Scheduler::from_client(Scheduler::default_client()?);
+    scheduler.add_pending(Url::parse("https://sites.duke.edu/intersections/")?);
+    scheduler.recursion().await;
     Ok(())
 }
 

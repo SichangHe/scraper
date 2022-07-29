@@ -39,7 +39,7 @@ pub fn links_from_html(url: &Url, str: String) -> (String, Vec<Url>, Vec<Url>) {
         match href_url {
             Ok(href_url) => hrefs.push(href_url),
             Err(err) => {
-                println!("{err}");
+                println!("{err}.");
             }
         }
     }
@@ -51,7 +51,7 @@ pub fn links_from_html(url: &Url, str: String) -> (String, Vec<Url>, Vec<Url>) {
         match img_url {
             Ok(img_url0) => imgs.push(img_url0),
             Err(err) => {
-                println!("{err}");
+                println!("{err}.");
             }
         }
     }
