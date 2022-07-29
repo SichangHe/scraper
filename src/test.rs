@@ -2,9 +2,10 @@ use std::time::Duration;
 
 use anyhow::{Ok, Result};
 use reqwest::{Client, Url};
+use tokio::time::sleep;
 use xxhash_rust::xxh3::xxh3_64;
 
-use crate::{io::save_file, schedule::Scheduler};
+use crate::{io::save_file, middle::Request, schedule::Scheduler};
 
 #[test]
 fn hash_test() {
@@ -34,6 +35,23 @@ async fn reqwest_test() -> Result<()> {
     println!("Headers: {headers:?}");
     let final_url = response.url();
     println!("Final URL: {final_url}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn request_test() -> Result<()> {
+    let request = Request::spawn(
+        0,
+        Scheduler::default_client()?.get("https://www.rust-lang.org"),
+    )
+    .await;
+    println!("{request:#?}");
+    while !request.handle.is_finished() {
+        println!("Request hasn't finished.");
+        sleep(Duration::from_millis(250)).await;
+    }
+    let response = request.handle.await??;
+    println!("{response:#?}");
     Ok(())
 }
 

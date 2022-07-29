@@ -1,5 +1,5 @@
 use anyhow::Result;
-use reqwest::{RequestBuilder, Url};
+use reqwest::{RequestBuilder, Response, Url};
 use tokio::{spawn, task::JoinHandle};
 
 use crate::{
@@ -8,22 +8,28 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct Attempt {
+pub struct Request {
     pub url_id: usize,
-    pub handle: JoinHandle<Result<Conclusion>>,
+    pub handle: JoinHandle<Result<Response>>,
 }
 
-impl Attempt {
+impl Request {
     pub async fn spawn(url_id: usize, request: RequestBuilder) -> Self {
         Self {
             url_id,
-            handle: spawn(process_request(request)),
+            handle: spawn(async {
+                let response = request.send().await?;
+                Ok(response)
+            }),
         }
     }
 }
 
-async fn process_request(request: RequestBuilder) -> Result<Conclusion> {
-    let response = request.send().await?;
+pub async fn double_unwrap<T>(handle: JoinHandle<Result<T>>) -> Result<T> {
+    handle.await?
+}
+
+async fn process_response(response: Response) -> Result<Conclusion> {
     let final_url = response.url().to_owned();
     let url_str = clean_url(&final_url);
     let headers = response.headers();
@@ -54,4 +60,19 @@ async fn process_request(request: RequestBuilder) -> Result<Conclusion> {
 
 fn clean_url(url: &Url) -> String {
     url.to_string().split('#').next().unwrap().to_owned()
+}
+
+#[derive(Debug)]
+pub struct Process {
+    pub url_id: usize,
+    pub handle: JoinHandle<Result<Conclusion>>,
+}
+
+impl Process {
+    pub async fn spawn(url_id: usize, response: Response) -> Self {
+        Self {
+            url_id,
+            handle: spawn(process_response(response)),
+        }
+    }
 }
