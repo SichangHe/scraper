@@ -5,12 +5,8 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     time::Duration,
 };
-use tokio::task::JoinHandle;
 
-use crate::{
-    io::save_file,
-    scrape::{scrape_with_new_thread, Conclusion, FileContent},
-};
+use crate::{file::FileContent, io::save_file, middle::Attempt, scrape::Conclusion};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 const TIMEOUT_MULTIPLIER: u32 = 5;
@@ -20,7 +16,7 @@ const OTHER_DIR: &str = "other/";
 #[derive(Debug)]
 pub struct Scheduler {
     client: Client,
-    handles: Vec<(usize, JoinHandle<Result<Conclusion>>)>,
+    attempts: Vec<Attempt>,
     urls: BTreeMap<Url, usize>,
     url_ids: BTreeMap<usize, Url>,
     scrapes: BTreeSet<usize>,
@@ -34,7 +30,7 @@ impl Scheduler {
     pub fn from_client(client: Client) -> Self {
         Self {
             client,
-            handles: Vec::new(),
+            attempts: Vec::new(),
             urls: BTreeMap::new(),
             url_ids: BTreeMap::new(),
             scrapes: BTreeSet::new(),
@@ -78,29 +74,29 @@ impl Scheduler {
             .pop_front()
             .ok_or_else(|| Error::msg("No pending URLs."))?;
         let url = self.url_ids.get(&url_id).unwrap().to_owned();
-        self.handles
-            .push((url_id, scrape_with_new_thread(self.client.get(url)).await));
+        self.attempts
+            .push(Attempt::spawn(url_id, self.client.get(url)).await);
         Ok(())
     }
 
     pub async fn check_handles(&mut self) -> Result<()> {
-        let mut index = self.handles.len();
+        let mut index = self.attempts.len();
         while index > 0 {
             index -= 1;
-            if self.handles[index].1.is_finished() {
-                let handle = self.handles.remove(index);
+            if self.attempts[index].handle.is_finished() {
+                let handle = self.attempts.remove(index);
                 index -= 1;
-                match handle.1.await {
+                match handle.handle.await {
                     Ok(conclusion_or_err) => match conclusion_or_err {
-                        Ok(conclusion) => self.conclusions.push((handle.0, conclusion)),
+                        Ok(conclusion) => self.conclusions.push((handle.url_id, conclusion)),
                         Err(err) => {
                             println!("{err}");
-                            self.fail(handle.0)
+                            self.fail(handle.url_id)
                         }
                     },
                     Err(err) => {
                         println!("{err}");
-                        self.fail(handle.0)
+                        self.fail(handle.url_id)
                     }
                 }
             }
@@ -170,8 +166,9 @@ impl Scheduler {
 
     // Strictly for test.
     pub async fn finish(&mut self) -> Result<()> {
-        while let Some(handle) = self.handles.pop() {
-            self.conclusions.push((handle.0, handle.1.await??));
+        while let Some(handle) = self.attempts.pop() {
+            self.conclusions
+                .push((handle.url_id, handle.handle.await??));
         }
         Ok(())
     }
