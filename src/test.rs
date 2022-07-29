@@ -6,7 +6,7 @@ use reqwest::{Client, Url};
 use tokio::time::sleep;
 use xxhash_rust::xxh3::xxh3_64;
 
-use crate::{io::save_file, middle::Request, schedule::Scheduler};
+use crate::{io::save_file, middle::Request, schedule::Scheduler, urls::Record};
 
 #[test]
 fn hash_test() {
@@ -101,5 +101,19 @@ async fn save_file_test() -> Result<()> {
 #[test]
 fn regex_test() -> Result<()> {
     assert!(!Regex::new("#")?.is_match("https://sites.duke.edu/intersections/.*"));
+    Ok(())
+}
+
+#[test]
+fn record_serialize_test() -> Result<()> {
+    let mut record = Record::default();
+    record
+        .check_add_url(Url::parse("https://www.rust-lang.org")?)
+        .unwrap();
+    record
+        .check_add_url(Url::parse("https://sites.duke.edu/intersections/")?)
+        .unwrap();
+    let toml = toml::to_string_pretty(&record)?;
+    println!("{toml}");
     Ok(())
 }

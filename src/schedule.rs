@@ -2,16 +2,14 @@ use anyhow::Result;
 use bytes::Bytes;
 use regex::Regex;
 use reqwest::{Client, Response, Url};
-use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
-    time::Duration,
-};
+use std::{collections::VecDeque, time::Duration};
 use tokio::time::{sleep, Instant};
 
 use crate::{
     file::FileContent,
-    io::save_file,
+    io::{save_file, Writer},
     middle::{double_unwrap, Conclusion, Process, Request},
+    urls::Record,
 };
 
 const DEFAULT_DELAY: Duration = Duration::from_millis(500);
@@ -27,15 +25,12 @@ pub struct Scheduler {
     client: Client,
     filter: Regex,
     blacklist: Regex,
-    urls: BTreeMap<Url, usize>,
-    url_ids: BTreeMap<usize, Url>,
-    scrapes: BTreeSet<usize>,
-    fails: BTreeSet<usize>,
-    redirects: BTreeMap<usize, usize>,
+    rec: Record,
     pending: VecDeque<usize>,
     requests: Vec<Request>,
     processes: Vec<Process>,
     conclusions: Vec<Conclusion>,
+    writer: Option<Writer>,
 }
 
 impl Scheduler {
@@ -46,15 +41,12 @@ impl Scheduler {
             client,
             filter: Self::default_filter(),
             blacklist: Self::default_blacklist(),
-            urls: BTreeMap::new(),
-            url_ids: BTreeMap::new(),
-            scrapes: BTreeSet::new(),
-            fails: BTreeSet::new(),
-            redirects: BTreeMap::new(),
+            rec: Record::default(),
             pending: VecDeque::new(),
             requests: Vec::new(),
             processes: Vec::new(),
             conclusions: Vec::new(),
+            writer: None,
         }
     }
 
@@ -91,22 +83,9 @@ impl Scheduler {
     }
 
     pub fn add_pending(&mut self, url: Url) {
-        if let Ok(index) = self.check_add_url(url) {
+        if let Ok(index) = self.rec.check_add_url(url) {
             self.pending.push_back(index);
         }
-    }
-
-    /// If given URL is recorded, return `Err(url_id)`
-    ///
-    /// If it is not, record it and return `Ok(url_id)`
-    pub fn check_add_url(&mut self, url: Url) -> Result<usize, usize> {
-        if let Some(index) = self.urls.get(&url) {
-            return Err(*index);
-        }
-        let index = self.urls.len();
-        self.urls.insert(url.clone(), index);
-        self.url_ids.insert(index, url);
-        Ok(index)
     }
 
     pub async fn spawn_one_request(&mut self) {
@@ -114,7 +93,7 @@ impl Scheduler {
             Some(url_id) => url_id,
             None => return,
         };
-        let url = self.url_ids.get(&url_id).unwrap().to_owned();
+        let url = self.rec.url_ids.get(&url_id).unwrap().to_owned();
         println!("\tRequesting {url_id} | {url}.");
         self.requests
             .push(Request::spawn(url_id, self.client.get(url)).await);
@@ -167,21 +146,10 @@ impl Scheduler {
     }
 
     async fn process_response(&mut self, url_id: usize, response: Response) {
-        let final_url_id = match self.check_add_url(response.url().to_owned()) {
-            Ok(final_url_id) => final_url_id,
-            Err(final_url_id) => {
-                if url_id != final_url_id && self.scrapes.contains(&final_url_id) {
-                    println!("\t{url_id}: already scraped as {final_url_id}.");
-                    return; // abort because scraped
-                }
-                final_url_id
-            }
+        let final_url_id = match self.rec.ckeck_final_url(url_id, &response).await {
+            Some(id) => id,
+            None => return,
         };
-        if url_id != final_url_id {
-            println!("\t{url_id} redirected to {url_id}.");
-            self.redirects.insert(url_id, final_url_id);
-        }
-        self.scrapes.insert(final_url_id);
         println!("\tProcessing {final_url_id}.");
         self.processes
             .push(Process::spawn(final_url_id, response).await);
@@ -302,10 +270,10 @@ impl Scheduler {
     }
 
     fn fail(&mut self, url_id: usize) {
-        if self.fails.contains(&url_id) {
+        if self.rec.fails.contains(&url_id) {
             return;
         }
-        self.fails.insert(url_id);
+        self.rec.fails.insert(url_id);
         self.pending.push_back(url_id);
     }
 }
