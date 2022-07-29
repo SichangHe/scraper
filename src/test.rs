@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{Ok, Result};
+use regex::Regex;
 use reqwest::{Client, Url};
 use tokio::time::sleep;
 use xxhash_rust::xxh3::xxh3_64;
@@ -57,7 +58,7 @@ async fn request_test() -> Result<()> {
 
 #[tokio::test]
 async fn scheduler_test() -> Result<()> {
-    let mut scheduler = Scheduler::from_client(Scheduler::default_client()?);
+    let mut scheduler = Scheduler::new()?;
     scheduler.add_pending(Url::parse("https://www.rust-lang.org")?);
     scheduler.spawn_one_request().await;
     scheduler.finish().await?;
@@ -67,7 +68,8 @@ async fn scheduler_test() -> Result<()> {
 
 #[tokio::test]
 async fn scheduler_recursion_test() -> Result<()> {
-    let mut scheduler = Scheduler::from_client(Scheduler::default_client()?);
+    let mut scheduler =
+        Scheduler::new()?.filter(Regex::new(r"https://sites.duke.edu/intersections/.*").unwrap());
     scheduler.add_pending(Url::parse("https://sites.duke.edu/intersections/")?);
     scheduler.recursion().await;
     Ok(())
@@ -93,5 +95,11 @@ async fn process_header_test() -> Result<()> {
 #[tokio::test]
 async fn save_file_test() -> Result<()> {
     save_file("dne/0.txt", b"hey").await?;
+    Ok(())
+}
+
+#[test]
+fn regex_test() -> Result<()> {
+    assert!(!Regex::new("#")?.is_match("https://sites.duke.edu/intersections/.*"));
     Ok(())
 }

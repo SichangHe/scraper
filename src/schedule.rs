@@ -1,5 +1,6 @@
 use anyhow::Result;
 use bytes::Bytes;
+use regex::Regex;
 use reqwest::{Client, Response, Url};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -14,7 +15,7 @@ use crate::{
 };
 
 const DEFAULT_DELAY: Duration = Duration::from_millis(500);
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 const TIMEOUT_MULTIPLIER: u32 = 5;
 const HTML_DIR: &str = "html/";
 const OTHER_DIR: &str = "other/";
@@ -24,6 +25,8 @@ pub struct Scheduler {
     time: Instant,
     delay: Duration,
     client: Client,
+    filter: Regex,
+    blacklist: Regex,
     urls: BTreeMap<Url, usize>,
     url_ids: BTreeMap<usize, Url>,
     scrapes: BTreeSet<usize>,
@@ -41,6 +44,8 @@ impl Scheduler {
             time: Instant::now(),
             delay: DEFAULT_DELAY,
             client,
+            filter: Self::default_filter(),
+            blacklist: Self::default_blacklist(),
             urls: BTreeMap::new(),
             url_ids: BTreeMap::new(),
             scrapes: BTreeSet::new(),
@@ -54,7 +59,7 @@ impl Scheduler {
     }
 
     pub fn default_client() -> reqwest::Result<Client> {
-        Scheduler::client_with_timeout(DEFAULT_TIMEOUT)
+        Self::client_with_timeout(DEFAULT_TIMEOUT)
     }
 
     pub fn client_with_timeout(timeout: Duration) -> reqwest::Result<Client> {
@@ -62,6 +67,27 @@ impl Scheduler {
             .connect_timeout(timeout)
             .timeout(timeout * TIMEOUT_MULTIPLIER)
             .build()
+    }
+
+    pub fn new() -> Result<Self> {
+        let scheduler = Self::from_client(Self::default_client()?);
+        Ok(scheduler)
+    }
+
+    fn default_filter() -> Regex {
+        Regex::new(".*").unwrap()
+    }
+
+    fn default_blacklist() -> Regex {
+        Regex::new("#").unwrap()
+    }
+
+    pub fn filter(self, filter: Regex) -> Self {
+        Self { filter, ..self }
+    }
+
+    pub fn blacklist(self, blacklist: Regex) -> Self {
+        Self { blacklist, ..self }
     }
 
     pub fn add_pending(&mut self, url: Url) {
@@ -193,9 +219,13 @@ impl Scheduler {
         imgs: Vec<Url>,
     ) -> Result<()> {
         for href in hrefs {
-            self.add_pending(href);
+            let href_str = href.as_str();
+            if self.filter.is_match(href_str) && !self.blacklist.is_match(href_str) {
+                self.add_pending(href);
+            }
         }
         for img in imgs {
+            // Not filtering images.
             self.add_pending(img);
         }
         save_file(&format!("{HTML_DIR}{url_id}.html"), text.as_bytes()).await?;
@@ -209,12 +239,34 @@ impl Scheduler {
 
     pub async fn recursion(&mut self) {
         self.time = Instant::now();
+        let (mut pending_len, mut requests_len, mut processes_len, mut conclusions_len) = (
+            self.pending.len(),
+            self.requests.len(),
+            self.processes.len(),
+            self.conclusions.len(),
+        );
         while !self.pending.is_empty()
             || !self.requests.is_empty()
             || !self.processes.is_empty()
             || !self.conclusions.is_empty()
         {
-            self.one_cycle().await
+            self.one_cycle().await;
+            let changed = pending_len != self.pending.len()
+                || requests_len != self.requests.len()
+                || processes_len != self.processes.len()
+                || conclusions_len != self.conclusions.len();
+            (pending_len, requests_len, processes_len, conclusions_len) = (
+                self.pending.len(),
+                self.requests.len(),
+                self.processes.len(),
+                self.conclusions.len(),
+            );
+            if changed {
+                println!(
+                    "\t{} pending, {} requests, {} processes, {} conclusions.",
+                    pending_len, requests_len, processes_len, conclusions_len
+                );
+            }
         }
     }
 
@@ -225,13 +277,6 @@ impl Scheduler {
         self.check_processes().await;
         self.check_spawn_request().await;
         self.process_one_conclusion().await;
-        println!(
-            "\t{} pending, {} requests, {} processes, {} conclusions.",
-            self.pending.len(),
-            self.requests.len(),
-            self.processes.len(),
-            self.conclusions.len()
-        );
         sleep(self.delay.saturating_sub(self.time.elapsed())).await;
     }
 
