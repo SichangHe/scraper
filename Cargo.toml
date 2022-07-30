@@ -12,7 +12,7 @@ categories = [
 description = "Constant-frequency recursive CLI web scraper with frequency, filtering, file directory, and many other options for scraping HTML, images and other files."
 edition = "2021"
 keywords = [
-    "command-line application",
+    "command-line-application",
     "crawler",
     "HTML",
     "images",

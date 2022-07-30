@@ -71,6 +71,33 @@ was redirected to another URL (on the right).
 
 ## Usage
 
+```shell
+$ ./scraper
+recursive_scraper 0.2.1
+Steven Hé (Sīchàng)
+Scrapes given urls (separated by commas) recursively. Saves the results to 
+`html/` and `other/`, the log to `log/`, or other directories if specified.
+
+USAGE:
+    recursive_scraper [OPTIONS] <START_URLS>
+
+ARGS:
+    <START_URLS>
+
+OPTIONS:
+    -b, --blacklist <BLACKLIST>
+    -c, --connection-timeout <CONNECTION_TIMEOUT>
+    -d, --delay <DELAY>
+    -f, --filter <FILTER>
+    -h, --help                                       Print help information
+    -i, --disregard-html
+    -l, --log-dir <LOG_DIR>
+    -o, --other-dir <OTHER_DIR>
+    -s, --disregard-other
+    -t, --html-dir <HTML_DIR>
+    -V, --version                                    Print version information
+```
+
 Recursively scrape the whole `https://example.com/`:
 
 ```shell
