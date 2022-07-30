@@ -30,7 +30,7 @@ impl Record {
     /// `None` if the URL is already scraped.
     ///
     /// `Some(final_url_id)` otherwise.
-    pub async fn ckeck_final_url(&mut self, url_id: usize, response: &Response) -> Option<usize> {
+    pub async fn check_final_url(&mut self, url_id: usize, response: &Response) -> Option<usize> {
         let final_url_id = match self.check_add_url(response.url().to_owned()) {
             Ok(id) => id,
             Err(id) => {

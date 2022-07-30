@@ -16,9 +16,7 @@ const DEFAULT_DELAY: Duration = Duration::from_millis(500);
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 const TIMEOUT_MULTIPLIER: u32 = 5;
 const WRITE_FREQUENCY: usize = 8;
-const HTML_DIR: &str = "html/";
-const OTHER_DIR: &str = "other/";
-const RECORD_DIR: &str = "log/record.toml";
+const RECORD_DIR: &str = "record.toml";
 
 #[derive(Debug)]
 pub struct Scheduler {
@@ -32,6 +30,9 @@ pub struct Scheduler {
     requests: Vec<Request>,
     processes: Vec<Process>,
     conclusions: Vec<Conclusion>,
+    html_dir: String,
+    other_dir: String,
+    log_dir: String,
     writer: Option<Writer>,
 }
 
@@ -41,15 +42,22 @@ impl Scheduler {
             time: Instant::now(),
             delay: DEFAULT_DELAY,
             client,
-            filter: Self::default_filter(),
-            blacklist: Self::default_blacklist(),
+            filter: Regex::new(".*").unwrap(),
+            blacklist: Regex::new("#").unwrap(),
             rec: Record::default(),
             pending: VecDeque::new(),
             requests: Vec::new(),
             processes: Vec::new(),
             conclusions: Vec::new(),
+            html_dir: "html".to_owned(),
+            other_dir: "other".to_owned(),
+            log_dir: "log".to_owned(),
             writer: None,
         }
+    }
+
+    pub fn delay(self, delay: Duration) -> Self {
+        Self { delay, ..self }
     }
 
     pub fn default_client() -> reqwest::Result<Client> {
@@ -68,20 +76,24 @@ impl Scheduler {
         Ok(scheduler)
     }
 
-    fn default_filter() -> Regex {
-        Regex::new(".*").unwrap()
-    }
-
-    fn default_blacklist() -> Regex {
-        Regex::new("#").unwrap()
-    }
-
     pub fn filter(self, filter: Regex) -> Self {
         Self { filter, ..self }
     }
 
     pub fn blacklist(self, blacklist: Regex) -> Self {
         Self { blacklist, ..self }
+    }
+
+    pub fn html_dir(self, html_dir: String) -> Self {
+        Self { html_dir, ..self }
+    }
+
+    pub fn other_dir(self, other_dir: String) -> Self {
+        Self { other_dir, ..self }
+    }
+
+    pub fn log_dir(self, log_dir: String) -> Self {
+        Self { log_dir, ..self }
     }
 
     pub fn add_pending(&mut self, url: Url) {
@@ -148,7 +160,7 @@ impl Scheduler {
     }
 
     async fn process_response(&mut self, url_id: usize, response: Response) {
-        let final_url_id = match self.rec.ckeck_final_url(url_id, &response).await {
+        let final_url_id = match self.rec.check_final_url(url_id, &response).await {
             Some(id) => id,
             None => return,
         };
@@ -198,12 +210,12 @@ impl Scheduler {
             // Not filtering images.
             self.add_pending(img);
         }
-        save_file(&format!("{HTML_DIR}{url_id}.html"), text.as_bytes()).await?;
+        save_file(&format!("{}/{url_id}.html", self.html_dir), text.as_bytes()).await?;
         Ok(())
     }
 
     async fn process_other(&mut self, url_id: usize, extension: &str, bytes: Bytes) -> Result<()> {
-        save_file(&format!("{OTHER_DIR}{url_id}{extension}"), &bytes).await?;
+        save_file(&format!("{}/{url_id}{extension}", self.other_dir), &bytes).await?;
         Ok(())
     }
 
@@ -310,8 +322,13 @@ impl Scheduler {
         {
             let _ = self.writer.take();
         }
-        self.writer =
-            Some(Writer::spawn(RECORD_DIR, toml::to_string_pretty(&self.rec).unwrap()).await);
+        self.writer = Some(
+            Writer::spawn(
+                format!("{}/{RECORD_DIR}", self.log_dir),
+                toml::to_string_pretty(&self.rec).unwrap(),
+            )
+            .await,
+        );
     }
 
     async fn write_all(&mut self) {
