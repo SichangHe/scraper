@@ -46,7 +46,7 @@ Any urls specified by the user are not checked.
 If not specified,
 `filter` defaults to `".*"` to match any URLs,
 and `blacklist` defaults to `"#"` to match no URLs.
-(URLs processed do not include `#` because the scraper strip it to avoid repetition.)
+(URLs processed do not include `#` because the scraper strips it to avoid repetition.)
 
 ### Adjustable connection timeout
 
@@ -72,7 +72,7 @@ was redirected to another URL (on the right).
 ## Usage
 
 ```shell
-$ ./scraper
+$ ./scraper --help
 recursive_scraper 0.2.1
 Steven Hé (Sīchàng)
 Scrapes given urls (separated by commas) recursively. Saves the results to 
@@ -104,7 +104,7 @@ Recursively scrape the whole `https://example.com/`:
 ./scraper -f "https://example.com/.*" https://example.com/
 ```
 
-Same as above not I don't want images:
+Same as above except I don't want images:
 
 ```shell
 ./scraper -f "https://example.com/.*" -s https://example.com/
@@ -114,4 +114,10 @@ Only scrape the URLs I provide (separated by commas):
 
 ```shell
 ./scraper -f "#" https://example.com/blah,https://example.com/blahblah,https://example.com/bla
+```
+
+Scrape everything into one folder `result/`:
+
+```shell
+./scraper -f "https://example.com/.*" -l result/ -o result/ -t result/ https://example.com/
 ```
