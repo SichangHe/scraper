@@ -21,7 +21,7 @@ pub fn process_headers(headers: &HeaderMap) -> Result<FileType> {
     })
 }
 
-/// `Html(text: String, hrefs: Vec<Url>, imgs: Vec<Url>)`
+/// `Html(text: String, hrefs: BTreeSet<Url>, imgs: BTreeSet<Url>)`
 ///
 /// or
 ///

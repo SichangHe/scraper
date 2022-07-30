@@ -60,7 +60,7 @@ async fn scheduler_test() -> Result<()> {
     let mut scheduler = Scheduler::new()?;
     scheduler.add_pending(Url::parse("https://www.rust-lang.org")?);
     scheduler.spawn_one_request().await;
-    scheduler.finish().await?;
+    scheduler.finish().await;
     println!("{scheduler:#?}");
     Ok(())
 }

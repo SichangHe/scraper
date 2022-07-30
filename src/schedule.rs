@@ -266,6 +266,7 @@ impl Scheduler {
         )
     }
 
+    /// Recursively scrape until there are no more pending URLs.
     pub async fn recursion(&mut self) {
         self.time = Instant::now();
         let (mut pending_len, mut requests_len, mut processes_len, mut conclusions_len) =
@@ -322,8 +323,9 @@ impl Scheduler {
         }
     }
 
-    // Strictly for test.
-    pub async fn finish(&mut self) -> Result<()> {
+    /// Tell the scheduler to finish whatever is already started
+    /// and do not initiate any more requests.
+    pub async fn finish(&mut self) {
         self.time = Instant::now();
         while !self.requests.is_empty()
             || !self.processes.is_empty()
@@ -336,7 +338,6 @@ impl Scheduler {
             self.time += self.delay;
         }
         self.write_all().await;
-        Ok(())
     }
 
     fn fail(&mut self, url_id: usize) {
