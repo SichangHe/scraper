@@ -2,7 +2,10 @@ use anyhow::Result;
 use bytes::Bytes;
 use regex::Regex;
 use reqwest::{Client, Response, Url};
-use std::{collections::VecDeque, time::Duration};
+use std::{
+    collections::{BTreeSet, VecDeque},
+    time::Duration,
+};
 use tokio::time::{sleep, Instant};
 
 use crate::{
@@ -29,7 +32,7 @@ pub struct Scheduler {
     pending: VecDeque<usize>,
     requests: Vec<Request>,
     processes: Vec<Process>,
-    conclusions: Vec<Conclusion>,
+    conclusions: VecDeque<Conclusion>,
     disregard_html: bool,
     disregard_other: bool,
     html_dir: String,
@@ -50,7 +53,7 @@ impl Scheduler {
             pending: VecDeque::new(),
             requests: Vec::new(),
             processes: Vec::new(),
-            conclusions: Vec::new(),
+            conclusions: VecDeque::new(),
             disregard_html: false,
             disregard_other: false,
             html_dir: "html".to_owned(),
@@ -169,7 +172,7 @@ impl Scheduler {
         let Process { url_id, handle } = self.processes.remove(*index);
         *index = index.saturating_sub(1);
         match double_unwrap(handle).await {
-            Ok(conclusion) => self.conclusions.push(conclusion),
+            Ok(conclusion) => self.conclusions.push_back(conclusion),
             Err(err) => {
                 println!("{url_id}: {err}.");
                 self.fail(url_id);
@@ -189,7 +192,7 @@ impl Scheduler {
 
     pub async fn process_one_conclusion(&mut self) {
         let conclusion = {
-            if let Some(conclusion) = self.conclusions.pop() {
+            if let Some(conclusion) = self.conclusions.pop_front() {
                 conclusion
             } else {
                 // No conclusions pending.
@@ -215,8 +218,8 @@ impl Scheduler {
         &mut self,
         url_id: usize,
         text: String,
-        hrefs: Vec<Url>,
-        imgs: Vec<Url>,
+        hrefs: BTreeSet<Url>,
+        imgs: BTreeSet<Url>,
     ) -> Result<()> {
         if self.disregard_html {
             return Ok(());
@@ -225,6 +228,8 @@ impl Scheduler {
             let href_str = href.as_str();
             if self.filter.is_match(href_str) && !self.blacklist.is_match(href_str) {
                 self.add_pending(href);
+            } else {
+                _ = self.rec.check_add_url(href)
             }
         }
         for img in imgs {

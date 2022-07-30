@@ -30,6 +30,14 @@ async fn reqwest_test() -> Result<()> {
     Ok(())
 }
 
+#[test]
+#[should_panic]
+fn url_slash_test() {
+    let url0 = Url::parse("https://sites.duke.edu/intersections/vocabulary-lessons/").unwrap();
+    let url1 = Url::parse("https://sites.duke.edu/intersections/vocabulary-lessons").unwrap();
+    assert_eq!(url0, url1);
+}
+
 #[tokio::test]
 async fn request_test() -> Result<()> {
     let request = Request::spawn(

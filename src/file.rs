@@ -2,6 +2,7 @@ use anyhow::Result;
 use bytes::Bytes;
 use reqwest::{header::HeaderMap, Url};
 use select::{document::Document, predicate::Name};
+use std::collections::BTreeSet;
 
 pub enum FileType {
     Html,
@@ -27,35 +28,43 @@ pub fn process_headers(headers: &HeaderMap) -> Result<FileType> {
 /// `Other(extension: String, bytes: Bytes)`
 #[derive(Debug)]
 pub enum FileContent {
-    Html(String, Vec<Url>, Vec<Url>),
+    Html(String, BTreeSet<Url>, BTreeSet<Url>),
     Other(String, Bytes),
 }
 
-pub fn links_from_html(url: &Url, str: String) -> (String, Vec<Url>, Vec<Url>) {
-    let mut hrefs = Vec::new();
+pub fn links_from_html(url: &Url, str: String) -> (String, BTreeSet<Url>, BTreeSet<Url>) {
+    let mut hrefs = BTreeSet::new();
     let document = Document::from(str.as_str());
-    for href in document.find(Name("a")).filter_map(|n| n.attr("href")) {
+    let a_hrefs: BTreeSet<_> = document
+        .find(Name("a"))
+        .filter_map(|n| n.attr("href"))
+        .collect();
+    for href in a_hrefs {
         let href_url = url.join(href.split('#').next().unwrap());
         match href_url {
-            Ok(href_url) => hrefs.push(href_url),
+            Ok(href_url) => {
+                hrefs.insert(href_url);
+            }
             Err(err) => {
                 println!("{err}.");
             }
         }
     }
-    hrefs.sort();
-    hrefs.dedup();
-    let mut imgs = Vec::new();
-    for img in document.find(Name("img")).filter_map(|n| n.attr("src")) {
+    let mut imgs = BTreeSet::new();
+    let imgs_src: BTreeSet<_> = document
+        .find(Name("img"))
+        .filter_map(|n| n.attr("src"))
+        .collect();
+    for img in imgs_src {
         let img_url = url.join(img);
         match img_url {
-            Ok(img_url0) => imgs.push(img_url0),
+            Ok(img_url0) => {
+                imgs.insert(img_url0);
+            }
             Err(err) => {
                 println!("{err}.");
             }
         }
     }
-    imgs.sort();
-    imgs.dedup();
     (str, hrefs, imgs)
 }
