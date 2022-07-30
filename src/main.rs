@@ -36,6 +36,12 @@ async fn main() -> Result<()> {
     if let Some(log_dir) = args.log_dir {
         scheduler = scheduler.log_dir(log_dir)
     }
+    if args.disregard_html {
+        scheduler = scheduler.disregard_html();
+    }
+    if args.disregard_other {
+        scheduler = scheduler.disregard_other();
+    }
 
     for url in start_urls {
         scheduler.add_pending(url);
@@ -60,10 +66,14 @@ struct Args {
     delay: Option<u64>,
     #[clap(short, long)]
     filter: Option<String>,
+    #[clap(short = 'i', long, action)]
+    disregard_html: bool,
     #[clap(short, long)]
     log_dir: Option<String>,
     #[clap(short, long)]
     other_dir: Option<String>,
+    #[clap(short = 's', long, action)]
+    disregard_other: bool,
     #[clap(short = 't', long)]
     html_dir: Option<String>,
 }

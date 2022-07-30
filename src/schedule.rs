@@ -30,6 +30,8 @@ pub struct Scheduler {
     requests: Vec<Request>,
     processes: Vec<Process>,
     conclusions: Vec<Conclusion>,
+    disregard_html: bool,
+    disregard_other: bool,
     html_dir: String,
     other_dir: String,
     log_dir: String,
@@ -49,6 +51,8 @@ impl Scheduler {
             requests: Vec::new(),
             processes: Vec::new(),
             conclusions: Vec::new(),
+            disregard_html: false,
+            disregard_other: false,
             html_dir: "html".to_owned(),
             other_dir: "other".to_owned(),
             log_dir: "log".to_owned(),
@@ -82,6 +86,20 @@ impl Scheduler {
 
     pub fn blacklist(self, blacklist: Regex) -> Self {
         Self { blacklist, ..self }
+    }
+
+    pub fn disregard_html(self) -> Self {
+        Self {
+            disregard_html: true,
+            ..self
+        }
+    }
+
+    pub fn disregard_other(self) -> Self {
+        Self {
+            disregard_other: true,
+            ..self
+        }
     }
 
     pub fn html_dir(self, html_dir: String) -> Self {
@@ -200,6 +218,9 @@ impl Scheduler {
         hrefs: Vec<Url>,
         imgs: Vec<Url>,
     ) -> Result<()> {
+        if self.disregard_html {
+            return Ok(());
+        }
         for href in hrefs {
             let href_str = href.as_str();
             if self.filter.is_match(href_str) && !self.blacklist.is_match(href_str) {
@@ -215,6 +236,9 @@ impl Scheduler {
     }
 
     async fn process_other(&mut self, url_id: usize, extension: &str, bytes: Bytes) -> Result<()> {
+        if self.disregard_other {
+            return Ok(());
+        }
         save_file(&format!("{}/{url_id}{extension}", self.other_dir), &bytes).await?;
         Ok(())
     }
