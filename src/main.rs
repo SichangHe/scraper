@@ -2,9 +2,9 @@ use std::time::Duration;
 
 use anyhow::Result;
 use clap::Parser;
+use recursive_scraper::schedule::{Scheduler, DEFAULT_TIMEOUT};
 use regex::Regex;
 use reqwest::Url;
-use scraper::schedule::Scheduler;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -14,7 +14,12 @@ async fn main() -> Result<()> {
         .split(',')
         .map(|str| Url::parse(str).unwrap())
         .collect();
-    let mut scheduler = Scheduler::new()?;
+    let timeout = match args.connection_timeout {
+        Some(timeout) => Duration::from_millis(timeout),
+        None => DEFAULT_TIMEOUT,
+    };
+    let client = Scheduler::client_with_timeout(timeout)?;
+    let mut scheduler = Scheduler::from_client(client);
     if let Some(blacklist) = args.blacklist {
         let blacklist = Regex::new(&blacklist)?;
         scheduler = scheduler.blacklist(blacklist);
@@ -62,6 +67,8 @@ struct Args {
     start_urls: String,
     #[clap(short, long)]
     blacklist: Option<String>,
+    #[clap(short, long)]
+    connection_timeout: Option<u64>,
     #[clap(short, long)]
     delay: Option<u64>,
     #[clap(short, long)]

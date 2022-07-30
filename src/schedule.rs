@@ -12,11 +12,11 @@ use crate::{
     urls::Record,
 };
 
-const DEFAULT_DELAY: Duration = Duration::from_millis(500);
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
-const TIMEOUT_MULTIPLIER: u32 = 5;
-const WRITE_FREQUENCY: usize = 8;
-const RECORD_DIR: &str = "record.toml";
+pub const DEFAULT_DELAY: Duration = Duration::from_millis(500);
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
+pub const TIMEOUT_MULTIPLIER: u32 = 5;
+pub const WRITE_FREQUENCY: usize = 8;
+pub const RECORD_DIR: &str = "record.toml";
 
 #[derive(Debug)]
 pub struct Scheduler {

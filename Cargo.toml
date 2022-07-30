@@ -1,8 +1,29 @@
 [package]
-name = "scraper"
+name = "recursive_scraper"
 authors = ["Steven Hé (Sīchàng)"]
-version = "0.1.0"
+version = "0.2.0"
+
+categories = [
+    "accessibility",
+    "asynchronous",
+    "command-line-utilities",
+    "web-programming::http-client",
+]
+description = "Constant-frequency recursive CLI web scraper with frequency, filtering, file directory, and many other options for scraping HTML, images and other files."
 edition = "2021"
+keywords = [
+    "command-line application",
+    "crawler",
+    "HTML",
+    "images",
+    "recursive",
+    "scraper",
+    "spider",
+    "web",
+]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/SichangHe/scraper"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
