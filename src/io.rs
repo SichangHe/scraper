@@ -74,4 +74,8 @@ impl Writer {
             }),
         }
     }
+
+    pub async fn wait(self) -> Result<()> {
+        self.handle.await?
+    }
 }

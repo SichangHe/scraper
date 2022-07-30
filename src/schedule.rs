@@ -15,8 +15,10 @@ use crate::{
 const DEFAULT_DELAY: Duration = Duration::from_millis(500);
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 const TIMEOUT_MULTIPLIER: u32 = 5;
+const WRITE_FREQUENCY: usize = 8;
 const HTML_DIR: &str = "html/";
 const OTHER_DIR: &str = "other/";
+const RECORD_DIR: &str = "log/record.toml";
 
 #[derive(Debug)]
 pub struct Scheduler {
@@ -205,37 +207,61 @@ impl Scheduler {
         Ok(())
     }
 
-    pub async fn recursion(&mut self) {
-        self.time = Instant::now();
-        let (mut pending_len, mut requests_len, mut processes_len, mut conclusions_len) = (
+    fn vec_lens(&self) -> (usize, usize, usize, usize) {
+        (
             self.pending.len(),
             self.requests.len(),
             self.processes.len(),
             self.conclusions.len(),
-        );
+        )
+    }
+
+    fn rec_lens(&self) -> (usize, usize, usize, usize) {
+        (
+            self.rec.urls.len(),
+            self.rec.scrapes.len(),
+            self.rec.fails.len(),
+            self.rec.redirects.len(),
+        )
+    }
+
+    pub async fn recursion(&mut self) {
+        self.time = Instant::now();
+        let (mut pending_len, mut requests_len, mut processes_len, mut conclusions_len) =
+            self.vec_lens();
+        let (mut urls_len, mut scrapes_len, mut fails_len, mut redirects_len) = self.rec_lens();
+        let mut changes: usize = 0;
         while !self.pending.is_empty()
             || !self.requests.is_empty()
             || !self.processes.is_empty()
             || !self.conclusions.is_empty()
         {
             self.one_cycle().await;
-            let changed = pending_len != self.pending.len()
+            if pending_len != self.pending.len()
                 || requests_len != self.requests.len()
                 || processes_len != self.processes.len()
-                || conclusions_len != self.conclusions.len();
-            (pending_len, requests_len, processes_len, conclusions_len) = (
-                self.pending.len(),
-                self.requests.len(),
-                self.processes.len(),
-                self.conclusions.len(),
-            );
-            if changed {
+                || conclusions_len != self.conclusions.len()
+            {
+                (pending_len, requests_len, processes_len, conclusions_len) = self.vec_lens();
                 println!(
                     "\t{} pending, {} requests, {} processes, {} conclusions.",
                     pending_len, requests_len, processes_len, conclusions_len
                 );
             }
+            if urls_len != self.rec.urls.len()
+                || scrapes_len != self.rec.scrapes.len()
+                || fails_len != self.rec.fails.len()
+                || redirects_len != self.rec.redirects.len()
+            {
+                changes += 1;
+                (urls_len, scrapes_len, fails_len, redirects_len) = self.rec_lens();
+                if changes % WRITE_FREQUENCY == 0 {
+                    self.write().await;
+                }
+            }
         }
+
+        self.write_all().await;
     }
 
     async fn one_cycle(&mut self) {
@@ -257,6 +283,7 @@ impl Scheduler {
 
     // Strictly for test.
     pub async fn finish(&mut self) -> Result<()> {
+        self.time = Instant::now();
         while !self.requests.is_empty()
             || !self.processes.is_empty()
             || !self.conclusions.is_empty()
@@ -264,8 +291,10 @@ impl Scheduler {
             self.check_requests().await;
             self.check_processes().await;
             self.process_one_conclusion().await;
-            sleep(Duration::from_millis(250)).await;
+            sleep(self.delay.saturating_sub(self.time.elapsed())).await;
+            self.time += self.delay;
         }
+        self.write_all().await;
         Ok(())
     }
 
@@ -275,5 +304,27 @@ impl Scheduler {
         }
         self.rec.fails.insert(url_id);
         self.pending.push_back(url_id);
+    }
+
+    async fn write(&mut self) {
+        {
+            let _ = self.writer.take();
+        }
+        self.writer =
+            Some(Writer::spawn(RECORD_DIR, toml::to_string_pretty(&self.rec).unwrap()).await);
+    }
+
+    async fn write_all(&mut self) {
+        for _ in 0..8 {
+            self.write().await;
+            let writer = self.writer.take().unwrap();
+            if let Err(err) = writer.wait().await {
+                println!("Write all: {err}.");
+                sleep(Duration::from_secs(1)).await;
+            } else {
+                return;
+            }
+        }
+        println!("Fatal! Write all: all eight attempts failed!");
     }
 }
