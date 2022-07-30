@@ -11,16 +11,7 @@ categories = [
 ]
 description = "Constant-frequency recursive CLI web scraper with frequency, filtering, file directory, and many other options for scraping HTML, images and other files."
 edition = "2021"
-keywords = [
-    "command-line-application",
-    "crawler",
-    "HTML",
-    "images",
-    "recursive",
-    "scraper",
-    "spider",
-    "web",
-]
+keywords = ["crawler", "recursive", "scraper", "spider", "web"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/SichangHe/scraper"
