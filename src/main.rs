@@ -1,18 +1,35 @@
 use anyhow::Result;
+use clap::Parser;
+use regex::Regex;
 use reqwest::Url;
-use xxhash_rust::xxh3::xxh3_64;
-fn main() -> Result<()> {
-    let url = Url::parse("https://google.com")?;
-    let hash = xxh3_64(url.as_str().as_bytes());
-    let hash_bytes = hash.to_be_bytes();
-    let hash_bytes16 = (0..4)
-        .map(|i| u16::from_be_bytes([hash_bytes[2 * i], hash_bytes[2 * i + 1]]))
-        .collect::<Vec<_>>();
-    let hash_str = unsafe { String::from_utf8_unchecked(hash_bytes.to_vec()) };
-    let hash_str_utf16 = String::from_utf16(&hash_bytes16)?;
-    println!(
-        "{url}'s hash is {hash}, correspond to UTF8 string {hash_str},
-    and UTF16 string {hash_str_utf16}."
-    );
+use scraper::schedule::Scheduler;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let args = Args::parse();
+    println!("{args:?}");
+    let start_url = Url::parse(&args.start_url)?;
+    let mut scheduler = Scheduler::new()?;
+    if let Some(blacklist) = args.blacklist {
+        let blacklist = Regex::new(&blacklist)?;
+        scheduler = scheduler.blacklist(blacklist);
+    }
+    if let Some(filter) = args.filter {
+        let filter = Regex::new(&filter)?;
+        scheduler = scheduler.filter(filter);
+    }
+
+    scheduler.add_pending(start_url);
+    scheduler.recursion().await;
     Ok(())
+}
+
+#[derive(Debug, Parser)]
+#[clap(author, version)]
+struct Args {
+    start_url: String,
+    #[clap(short, long)]
+    blacklist: Option<String>,
+    #[clap(short, long)]
+    filter: Option<String>,
 }

@@ -4,17 +4,8 @@ use anyhow::{Ok, Result};
 use regex::Regex;
 use reqwest::{Client, Url};
 use tokio::time::sleep;
-use xxhash_rust::xxh3::xxh3_64;
 
 use crate::{io::save_file, middle::Request, schedule::Scheduler, urls::Record};
-
-#[test]
-fn hash_test() {
-    let url_str = "www.google.com";
-    let hash = xxh3_64(url_str.as_bytes());
-    println!("{hash}.");
-    println!("{hash:X}.");
-}
 
 #[tokio::test]
 async fn reqwest_test() -> Result<()> {
@@ -113,7 +104,7 @@ fn record_serialize_test() -> Result<()> {
     record
         .check_add_url(Url::parse("https://sites.duke.edu/intersections/")?)
         .unwrap();
-        record.scrapes.insert(0);
+    record.scrapes.insert(0);
     record.fails.insert(2);
     record.redirects.insert(3, 4);
     let toml = toml::to_string_pretty(&record)?;
