@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Error, Result};
 use reqwest::{RequestBuilder, Response, Url};
 use tokio::{spawn, task::JoinHandle};
 
@@ -27,6 +27,10 @@ pub async fn double_unwrap<T>(handle: JoinHandle<Result<T>>) -> Result<T> {
 }
 
 async fn process_response(url_id: usize, response: Response) -> Result<Conclusion> {
+    let status = response.status();
+    if !status.is_success() {
+        return Err(Error::msg(format!("status code error: {status}")));
+    }
     let final_url = response.url().to_owned();
     let url_str = clean_url(&final_url);
     let headers = response.headers();
