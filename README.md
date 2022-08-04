@@ -72,30 +72,53 @@ was redirected to another URL (on the right).
 ## Usage
 
 ```shell
-$ ./scraper --help
-recursive_scraper 0.2.1
+$ recursive_scraper --help
+recursive_scraper 0.3.0
 Steven Hé (Sīchàng)
-Scrapes given urls (separated by commas) recursively. Saves the results to 
-`html/` and `other/`, the log to `log/`, or other directories if specified.
+<https://github.com/SichangHe/scraper>
+
+Scrapes given urls (separated by commas) recursively. Saves the results to `html/` and `other/`, the
+log to `log/`, or other directories if specified.
 
 USAGE:
     recursive_scraper [OPTIONS] <START_URLS>
 
 ARGS:
-    <START_URLS>
+    <START_URLS>    The URLs to start scraping from, separated by commas.
 
 OPTIONS:
     -b, --blacklist <BLACKLIST>
+            Regex to match URLs that should be excluded.
+
     -c, --connection-timeout <CONNECTION_TIMEOUT>
+            Connection timeout for each request in integer milliseconds.
+
     -d, --delay <DELAY>
+            Delay between each request in integer milliseconds
+
     -f, --filter <FILTER>
-    -h, --help                                       Print help information
+            Regex to match URLs that should be included.
+
+    -h, --help
+            Print help information
+
     -i, --disregard-html
+            Do not save HTMLs.
+
     -l, --log-dir <LOG_DIR>
+            Directory to output the log.
+
     -o, --other-dir <OTHER_DIR>
+            Directory to save non-HTMLs.
+
     -s, --disregard-other
+            Do not save non-HTMLs.
+
     -t, --html-dir <HTML_DIR>
-    -V, --version                                    Print version information
+            Directory to save HTMLs.
+
+    -V, --version
+            Print version information
 ```
 
 Recursively scrape the whole `https://example.com/`:

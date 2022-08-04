@@ -59,28 +59,39 @@ async fn main() -> Result<()> {
 #[clap(
     author,
     version,
-    about = "Scrapes given urls (separated by commas) recursively. \
+    about = "<https://github.com/SichangHe/scraper>
+
+Scrapes given urls (separated by commas) recursively. \
     Saves the results to `html/` and `other/`, the log to `log/`, \
     or other directories if specified."
 )]
 struct Args {
+    #[clap(help = "The URLs to start scraping from, separated by commas.")]
     start_urls: String,
-    #[clap(short, long)]
+    #[clap(short, long, help = "Regex to match URLs that should be excluded.")]
     blacklist: Option<String>,
-    #[clap(short, long)]
+    #[clap(
+        short,
+        long,
+        help = "Connection timeout for each request in integer milliseconds."
+    )]
     connection_timeout: Option<u64>,
-    #[clap(short, long)]
+    #[clap(
+        short,
+        long,
+        help = "Delay between each request in integer milliseconds"
+    )]
     delay: Option<u64>,
-    #[clap(short, long)]
+    #[clap(short, long, help = "Regex to match URLs that should be included.")]
     filter: Option<String>,
-    #[clap(short = 'i', long, action)]
+    #[clap(short = 'i', long, action, help = "Do not save HTMLs.")]
     disregard_html: bool,
-    #[clap(short, long)]
+    #[clap(short, long, help = "Directory to output the log.")]
     log_dir: Option<String>,
-    #[clap(short, long)]
+    #[clap(short, long, help = "Directory to save non-HTMLs.")]
     other_dir: Option<String>,
-    #[clap(short = 's', long, action)]
+    #[clap(short = 's', long, action, help = "Do not save non-HTMLs.")]
     disregard_other: bool,
-    #[clap(short = 't', long)]
+    #[clap(short = 't', long, help = "Directory to save HTMLs.")]
     html_dir: Option<String>,
 }

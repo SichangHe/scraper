@@ -221,9 +221,6 @@ impl Scheduler {
         hrefs: BTreeSet<Url>,
         imgs: BTreeSet<Url>,
     ) -> Result<()> {
-        if self.disregard_html {
-            return Ok(());
-        }
         for href in hrefs {
             let href_str = href.as_str();
             if self.filter.is_match(href_str) && !self.blacklist.is_match(href_str) {
@@ -236,7 +233,9 @@ impl Scheduler {
             // Not filtering images.
             self.add_pending(img);
         }
-        save_file(&format!("{}/{url_id}.html", self.html_dir), text.as_bytes()).await?;
+        if !self.disregard_html {
+            save_file(&format!("{}/{url_id}.html", self.html_dir), text.as_bytes()).await?;
+        }
         Ok(())
     }
 
