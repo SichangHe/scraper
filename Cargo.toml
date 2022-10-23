@@ -19,16 +19,16 @@ repository = "https://github.com/SichangHe/scraper"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.58"
-bytes = "1.2.0"
-clap = { version = "3.2.15", features = ["derive"] }
+anyhow = "1.0.66"
+bytes = "1.2.1"
+clap = { version = "3.2.22", features = ["derive"] }
 env_logger = "0.9.1"
 log = "0.4.17"
 regex = "1.6.0"
-reqwest = "0.11.11"
+reqwest = "0.11.12"
 select = "0.5.0"
-serde = { version = "1.0.140", features = ["derive"] }
-tokio = { version = "1.20.0", features = [
+serde = { version = "1.0.147", features = ["derive"] }
+tokio = { version = "1.21.2", features = [
     "rt-multi-thread",
     "macros",
     "fs",
@@ -38,5 +38,4 @@ tokio = { version = "1.20.0", features = [
 toml = "0.5.9"
 
 [profile.release]
-opt-level = 2
-lto = "thin"
+lto = true
