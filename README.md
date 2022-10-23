@@ -81,13 +81,12 @@ was redirected to another URL (on the right).
 
 ```shell
 $ recursive_scraper --help
-recursive_scraper 0.3.0
+recursive_scraper 0.4.0
 Steven Hé (Sīchàng)
 <https://github.com/SichangHe/scraper>
 
 Scrapes given urls (separated by commas) recursively.
-Saves the results to `html/` and `other/`,
-the log to `log/`,
+Saves the results to `html/` and `other/`, the log to `log/`,
 or other directories if specified.
 
 USAGE:
