@@ -1,5 +1,6 @@
 use anyhow::Result;
 use bytes::Bytes;
+use log::warn;
 use reqwest::{header::HeaderMap, Url};
 use select::{document::Document, predicate::Name};
 use std::collections::BTreeSet;
@@ -46,7 +47,7 @@ pub fn links_from_html(url: &Url, str: String) -> (String, BTreeSet<Url>, BTreeS
                 hrefs.insert(href_url);
             }
             Err(err) => {
-                println!("{err}.");
+                warn!("{err}.");
             }
         }
     }
@@ -62,7 +63,7 @@ pub fn links_from_html(url: &Url, str: String) -> (String, BTreeSet<Url>, BTreeS
                 imgs.insert(img_url0);
             }
             Err(err) => {
-                println!("{err}.");
+                warn!("{err}.");
             }
         }
     }

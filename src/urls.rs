@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use log::{debug, info};
 use reqwest::{Response, Url};
 use serde::{ser::SerializeStruct, Serialize};
 
@@ -35,14 +36,14 @@ impl Record {
             Ok(id) => id,
             Err(id) => {
                 if url_id != id && self.scrapes.contains(&id) {
-                    println!("\t{url_id}: already scraped as {id}.");
+                    debug!("{url_id}: already scraped as {id}.");
                     return None;
                 }
                 id
             }
         };
         if url_id != final_url_id {
-            println!("\t{url_id} redirected to {url_id}.");
+            info!("{url_id} redirected to {url_id}.");
             self.redirects.insert(url_id, final_url_id);
         }
         self.scrapes.insert(final_url_id);

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use bytes::Bytes;
+use log::{debug, error, info};
 use regex::Regex;
 use reqwest::{Client, Response, Url};
 use std::{
@@ -129,7 +130,7 @@ impl Scheduler {
             None => return,
         };
         let url = self.rec.url_ids.get(&url_id).unwrap().to_owned();
-        println!("\tRequesting {url_id} | {url}.");
+        info!("Requesting {url_id} | {url}.");
         self.requests
             .push(Request::spawn(url_id, self.client.get(url)).await);
     }
@@ -151,7 +152,7 @@ impl Scheduler {
         match double_unwrap(handle).await {
             Ok(response) => self.process_response(url_id, response).await,
             Err(err) => {
-                println!("{url_id}: {err}.");
+                error!("{url_id}: {err}.");
                 self.fail(url_id);
             }
         };
@@ -174,7 +175,7 @@ impl Scheduler {
         match double_unwrap(handle).await {
             Ok(conclusion) => self.conclusions.push_back(conclusion),
             Err(err) => {
-                println!("{url_id}: {err}.");
+                error!("{url_id}: {err}.");
                 self.fail(url_id);
             }
         }
@@ -185,7 +186,7 @@ impl Scheduler {
             Some(id) => id,
             None => return,
         };
-        println!("\tProcessing {final_url_id}.");
+        debug!("Processing {final_url_id}.");
         self.processes
             .push(Process::spawn(final_url_id, response).await);
     }
@@ -209,7 +210,7 @@ impl Scheduler {
             }
         }
         .unwrap_or_else(|err| {
-            println!("{url_id}: {err}.");
+            error!("{url_id}: {err}.");
             self.fail(url_id);
         });
     }
@@ -284,8 +285,8 @@ impl Scheduler {
                 || conclusions_len != self.conclusions.len()
             {
                 (pending_len, requests_len, processes_len, conclusions_len) = self.vec_lens();
-                println!(
-                    "\t{} pending, {} requests, {} processes, {} conclusions.",
+                debug!(
+                    "{} pending, {} requests, {} processes, {} conclusions.",
                     pending_len, requests_len, processes_len, conclusions_len
                 );
             }
@@ -365,12 +366,12 @@ impl Scheduler {
             self.write().await;
             let writer = self.writer.take().unwrap();
             if let Err(err) = writer.wait().await {
-                println!("Write all: {err}.");
+                error!("Write all: {err}.");
                 sleep(Duration::from_secs(1)).await;
             } else {
                 return;
             }
         }
-        println!("Fatal! Write all: all eight attempts failed!");
+        error!("Fatal! Write all: all eight attempts failed!");
     }
 }

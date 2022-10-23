@@ -25,6 +25,14 @@ just provide a tricky `filter` such as `"#"`
 and it will function as a *non-recursive* scraper.
 One usage of *non-recursive* scraping is bulk image scraping.
 
+## Installation
+
+Use Cargo to install recursive_scraper:
+
+```shell
+cargo install recursive_scraper
+```
+
 ## Features
 
 ### Constant frequency
@@ -77,8 +85,10 @@ recursive_scraper 0.3.0
 Steven Hé (Sīchàng)
 <https://github.com/SichangHe/scraper>
 
-Scrapes given urls (separated by commas) recursively. Saves the results to `html/` and `other/`, the
-log to `log/`, or other directories if specified.
+Scrapes given urls (separated by commas) recursively.
+Saves the results to `html/` and `other/`,
+the log to `log/`,
+or other directories if specified.
 
 USAGE:
     recursive_scraper [OPTIONS] <START_URLS>
@@ -124,23 +134,49 @@ OPTIONS:
 Recursively scrape the whole `https://example.com/`:
 
 ```shell
-./scraper -f "https://example.com/.*" https://example.com/
+recursive_scraper -f "https://example.com/.*" https://example.com/
 ```
 
 Same as above except I don't want images:
 
 ```shell
-./scraper -f "https://example.com/.*" -s https://example.com/
+recursive_scraper -f "https://example.com/.*" -s https://example.com/
 ```
 
 Only scrape the URLs I provide (separated by commas):
 
 ```shell
-./scraper -f "#" https://example.com/blah,https://example.com/blahblah,https://example.com/bla
+recursive_scraper -f "#" https://example.com/blah,https://example.com/blahblah,https://example.com/bla
 ```
 
 Scrape everything into one folder `result/`:
 
 ```shell
-./scraper -f "https://example.com/.*" -l result/ -o result/ -t result/ https://example.com/
+recursive_scraper -f "https://example.com/.*" -l result/ -o result/ -t result/ https://example.com/
 ```
+
+### Environment variable
+
+recursive_scraper uses [env_logger](https://docs.rs/env_logger/)
+for logging,
+so you can set `RUST_LOG` to control the log level.
+
+For example, if you want to do the same as the first example above with
+the log level set to `info`:
+
+```shell
+RUST_LOG=recursive_scraper=info recursive_scraper -f "https://example.com/.*" https://example.com/
+```
+
+On fish shell, you would instead do:
+
+```fish
+env RUST_LOG=recursive_scraper=info recursive_scraper -f "https://example.com/.*" https://example.com/
+```
+
+The log level is by default `error`.
+Other options include `warn`, `info`, and `debug`.
+
+For more instruction, see the
+[Enable Logging](https://docs.rs/env_logger/latest/env_logger/#enabling-logging)
+section from env_logger.

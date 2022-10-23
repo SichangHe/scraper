@@ -2,12 +2,14 @@ use std::time::Duration;
 
 use anyhow::Result;
 use clap::Parser;
+use log::debug;
 use recursive_scraper::schedule::{Scheduler, DEFAULT_TIMEOUT};
 use regex::Regex;
 use reqwest::Url;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    env_logger::init();
     let args = Args::parse();
     let start_urls: Vec<_> = args
         .start_urls
@@ -51,6 +53,7 @@ async fn main() -> Result<()> {
     for url in start_urls {
         scheduler.add_pending(url);
     }
+    debug!("Starting with {scheduler:#?}.");
     scheduler.recursion().await;
     Ok(())
 }
