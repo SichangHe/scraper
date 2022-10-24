@@ -62,14 +62,13 @@ async fn main() -> Result<()> {
 }
 
 #[derive(Debug, Parser)]
-#[clap(
+#[command(
     author,
     version,
-    about = "<https://github.com/SichangHe/scraper>
-
-Scrapes given urls (separated by commas) recursively.\n\
+    about = "Scrapes given urls (separated by commas) recursively.\n\
 Saves the results to `html/` and `other/`, the log to `log/`,\n\
-or other directories if specified."
+or other directories if specified.
+See <https://github.com/SichangHe/scraper> for more instructions."
 )]
 struct Args {
     #[clap(help = "The URLs to start scraping from, separated by commas.")]
