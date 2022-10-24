@@ -134,6 +134,14 @@ impl Scheduler {
         }
     }
 
+    pub fn add_next_pending(&mut self, url: Url) {
+        if let Some(ref mut ring) = self.ring {
+            if let Ok(index) = self.rec.check_add_url(url) {
+                ring.next.push_back(index);
+            }
+        }
+    }
+
     pub async fn spawn_one_request(&mut self) -> bool {
         let url_id = match self.pending.pop_front() {
             Some(url_id) => url_id,
@@ -235,8 +243,12 @@ impl Scheduler {
     ) -> Result<()> {
         for href in hrefs {
             let href_str = href.as_str();
-            if self.filter.is_match(href_str) && !self.blacklist.is_match(href_str) {
-                self.add_pending(href);
+            if !self.blacklist.is_match(href_str) {
+                if self.filter.is_match(href_str) {
+                    self.add_pending(href);
+                } else {
+                    self.add_next_pending(href);
+                }
             } else {
                 _ = self.rec.check_add_url(href)
             }
