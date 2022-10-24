@@ -253,9 +253,11 @@ impl Scheduler {
                 _ = self.rec.check_add_url(href)
             }
         }
-        for img in imgs {
-            // Not filtering images.
-            self.add_pending(img);
+        if !self.disregard_other {
+            for img in imgs {
+                // Not filtering images.
+                self.add_pending(img);
+            }
         }
         if !self.disregard_html {
             save_file(&format!("{}/{url_id}.html", self.html_dir), text.as_bytes()).await?;
