@@ -77,11 +77,24 @@ each URL is mapped to an id based on their order of discovery.
 `[redirections]` records if one URL (whose id is on the left)
 was redirected to another URL (on the right).
 
+### Rings
+
+The URLs that does not match `filter` are URLs that are in the outer rings.
+To be rigorous, these URLs also need to not match `blacklist`.
+When scraping,
+the scraper would encounter hrefs that do not match `filter`,
+if `number_of_rings` is set,
+the scraper append these hrefs to the "next" pending list.
+When the scraper runs out of tasks,
+it takes the "next" pending list as the pending list
+and continue scraping
+if `number_of_rings` is set and the current ring is less than it.
+
 ## Usage
 
 ```shell
 $ recursive_scraper --help
-recursive_scraper 0.4.0
+recursive_scraper 0.5.0
 Steven Hé (Sīchàng)
 <https://github.com/SichangHe/scraper>
 
@@ -119,6 +132,9 @@ OPTIONS:
 
     -o, --other-dir <OTHER_DIR>
             Directory to save non-HTMLs.
+
+    -r, --number-of-rings <NUMBER_OF_RINGS>
+            Set the number of rings for the URLs outside the filter.
 
     -s, --disregard-other
             Do not save non-HTMLs.
