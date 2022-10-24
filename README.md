@@ -94,56 +94,41 @@ if `number_of_rings` is set and the current ring is less than it.
 
 ```shell
 $ recursive_scraper --help
-recursive_scraper 0.5.0
-Steven Hé (Sīchàng)
-<https://github.com/SichangHe/scraper>
-
 Scrapes given urls (separated by commas) recursively.
 Saves the results to `html/` and `other/`, the log to `log/`,
 or other directories if specified.
+See <https://github.com/SichangHe/scraper> for more instructions.
 
-USAGE:
-    recursive_scraper [OPTIONS] <START_URLS>
+Usage: recursive_scraper [OPTIONS] <START_URLS>
 
-ARGS:
-    <START_URLS>    The URLs to start scraping from, separated by commas.
+Arguments:
+  <START_URLS>  The URLs to start scraping from, separated by commas.
 
-OPTIONS:
-    -b, --blacklist <BLACKLIST>
-            Regex to match URLs that should be excluded.
-
-    -c, --connection-timeout <CONNECTION_TIMEOUT>
-            Connection timeout for each request in integer milliseconds.
-
-    -d, --delay <DELAY>
-            Delay between each request in integer milliseconds
-
-    -f, --filter <FILTER>
-            Regex to match URLs that should be included.
-
-    -h, --help
-            Print help information
-
-    -i, --disregard-html
-            Do not save HTMLs.
-
-    -l, --log-dir <LOG_DIR>
-            Directory to output the log.
-
-    -o, --other-dir <OTHER_DIR>
-            Directory to save non-HTMLs.
-
-    -r, --number-of-rings <NUMBER_OF_RINGS>
-            Set the number of rings for the URLs outside the filter.
-
-    -s, --disregard-other
-            Do not save non-HTMLs.
-
-    -t, --html-dir <HTML_DIR>
-            Directory to save HTMLs.
-
-    -V, --version
-            Print version information
+Options:
+  -b, --blacklist <BLACKLIST>
+          Regex to match URLs that should be excluded.
+  -c, --connection-timeout <CONNECTION_TIMEOUT>
+          Connection timeout for each request in integer milliseconds.
+  -d, --delay <DELAY>
+          Delay between each request in integer milliseconds
+  -f, --filter <FILTER>
+          Regex to match URLs that should be included.
+  -i, --disregard-html
+          Do not save HTMLs.
+  -l, --log-dir <LOG_DIR>
+          Directory to output the log.
+  -o, --other-dir <OTHER_DIR>
+          Directory to save non-HTMLs.
+  -r, --number-of-rings <NUMBER_OF_RINGS>
+          Set the number of rings for the URLs outside the filter.
+  -s, --disregard-other
+          Do not save non-HTMLs.
+  -t, --html-dir <HTML_DIR>
+          Directory to save HTMLs.
+  -h, --help
+          Print help information
+  -V, --version
+          Print version information
 ```
 
 Recursively scrape the whole `https://example.com/`:

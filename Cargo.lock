@@ -870,7 +870,7 @@ dependencies = [
 
 [[package]]
 name = "recursive_scraper"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "bytes",
