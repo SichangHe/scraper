@@ -1,3 +1,4 @@
+use log::info;
 use std::collections::VecDeque;
 use std::mem::take;
 
@@ -22,6 +23,7 @@ impl Ring {
             return None;
         }
         self.current += 1;
+        info!("Incrementing ring count to {}.", self.current);
         Some(take(&mut self.next))
     }
 }

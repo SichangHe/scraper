@@ -134,15 +134,16 @@ impl Scheduler {
         }
     }
 
-    pub async fn spawn_one_request(&mut self) {
+    pub async fn spawn_one_request(&mut self) -> bool {
         let url_id = match self.pending.pop_front() {
             Some(url_id) => url_id,
-            None => return,
+            None => return false,
         };
         let url = self.rec.url_ids.get(&url_id).unwrap().to_owned();
         info!("Requesting {url_id} | {url}.");
         self.requests
             .push(Request::spawn(url_id, self.client.get(url)).await);
+        true
     }
 
     pub async fn check_requests(&mut self) {
@@ -287,6 +288,7 @@ impl Scheduler {
             || !self.requests.is_empty()
             || !self.processes.is_empty()
             || !self.conclusions.is_empty()
+            || self.increment_ring()
         {
             self.one_cycle().await;
             if pending_len != self.pending.len()
@@ -316,6 +318,16 @@ impl Scheduler {
         self.write_all().await;
     }
 
+    fn increment_ring(&mut self) -> bool {
+        if let Some(ref mut ring) = self.ring {
+            if let Some(pending) = ring.increment() {
+                self.pending = pending;
+                return true;
+            }
+        }
+        false
+    }
+
     async fn one_cycle(&mut self) {
         self.check_spawn_request().await;
         self.check_requests().await;
@@ -327,8 +339,7 @@ impl Scheduler {
     }
 
     async fn check_spawn_request(&mut self) {
-        if self.time.elapsed() >= self.delay && !self.pending.is_empty() {
-            self.spawn_one_request().await;
+        if self.time.elapsed() >= self.delay && self.spawn_one_request().await {
             self.time += self.delay;
         }
     }
