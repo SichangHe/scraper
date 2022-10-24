@@ -49,6 +49,9 @@ async fn main() -> Result<()> {
     if args.disregard_other {
         scheduler = scheduler.disregard_other();
     }
+    if let Some(number_of_rings) = args.number_of_rings {
+        scheduler = scheduler.with_number_of_rings(number_of_rings);
+    }
 
     for url in start_urls {
         scheduler.add_pending(url);
@@ -93,6 +96,12 @@ struct Args {
     log_dir: Option<String>,
     #[clap(short, long, help = "Directory to save non-HTMLs.")]
     other_dir: Option<String>,
+    #[clap(
+        short = 'r',
+        long,
+        help = "Set the number of rings for the URLs outside the filter."
+    )]
+    number_of_rings: Option<u8>,
     #[clap(short = 's', long, action, help = "Do not save non-HTMLs.")]
     disregard_other: bool,
     #[clap(short = 't', long, help = "Directory to save HTMLs.")]

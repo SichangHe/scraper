@@ -6,6 +6,7 @@
 pub mod file;
 pub mod io;
 pub mod middle;
+pub mod ring;
 pub mod schedule;
 #[cfg(test)]
 mod test;

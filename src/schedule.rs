@@ -13,6 +13,7 @@ use crate::{
     file::FileContent,
     io::{save_file, Writer},
     middle::{double_unwrap, Conclusion, Process, Request},
+    ring::Ring,
     urls::Record,
 };
 
@@ -40,6 +41,7 @@ pub struct Scheduler {
     other_dir: String,
     log_dir: String,
     writer: Option<Writer>,
+    ring: Option<Ring>,
 }
 
 impl Scheduler {
@@ -61,6 +63,7 @@ impl Scheduler {
             other_dir: "other".to_owned(),
             log_dir: "log".to_owned(),
             writer: None,
+            ring: None,
         }
     }
 
@@ -116,6 +119,13 @@ impl Scheduler {
 
     pub fn log_dir(self, log_dir: String) -> Self {
         Self { log_dir, ..self }
+    }
+
+    pub fn with_number_of_rings(self, number_of_rings: u8) -> Self {
+        Self {
+            ring: Some(Ring::new(number_of_rings)),
+            ..self
+        }
     }
 
     pub fn add_pending(&mut self, url: Url) {
