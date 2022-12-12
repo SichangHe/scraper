@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{Ok, Result};
+use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use reqwest::{Client, Url};
 use tokio::time::sleep;
@@ -117,5 +118,23 @@ fn record_serialize_test() -> Result<()> {
     record.redirects.insert(3, 4);
     let toml = toml::to_string_pretty(&record)?;
     println!("{toml}");
+    Ok(())
+}
+
+/// This test shows that we cannot rely on FuturesUnordered to
+/// select the first finished thread.
+#[tokio::test]
+async fn what_type_is_future_unordered() -> Result<()> {
+    let client = Scheduler::default_client()?;
+    let mut futures = FuturesUnordered::new();
+    futures.push(Request::spawn(
+        0,
+        client.get(Url::parse("https://www.rust-lang.org")?),
+    ));
+    if let Some(n) = futures.next().await {
+        dbg!(&n);
+        let finished = n.handle.is_finished();
+        println!("Finished: {finished},"); // false
+    };
     Ok(())
 }

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use bytes::Bytes;
+use futures::{stream::FuturesUnordered, Future, StreamExt};
 use log::{debug, error, info};
 use regex::Regex;
 use reqwest::{Client, Response, Url};
@@ -32,7 +33,7 @@ pub struct Scheduler {
     blacklist: Regex,
     rec: Record,
     pending: VecDeque<usize>,
-    requests: Vec<Request>,
+    requests: FuturesUnordered<Box<dyn Future<Output = Request>>>,
     processes: Vec<Process>,
     conclusions: VecDeque<Conclusion>,
     disregard_html: bool,
@@ -54,7 +55,7 @@ impl Scheduler {
             blacklist: Regex::new("#").unwrap(),
             rec: Record::default(),
             pending: VecDeque::new(),
-            requests: Vec::new(),
+            requests: FuturesUnordered::new(),
             processes: Vec::new(),
             conclusions: VecDeque::new(),
             disregard_html: false,
@@ -155,10 +156,14 @@ impl Scheduler {
     }
 
     pub async fn check_requests(&mut self) {
-        let mut index = self.requests.len();
-        while index > 0 {
-            index -= 1;
-            self.check_one_request(&mut index).await;
+        if let Some(Request { url_id, handle }) = self.requests.next().await {
+            match double_unwrap(handle).await {
+                Ok(response) => self.process_response(url_id, response).await,
+                Err(err) => {
+                    error!("{url_id}: {err}.");
+                    self.fail(url_id);
+                }
+            };
         }
     }
 
