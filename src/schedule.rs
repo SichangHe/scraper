@@ -8,7 +8,7 @@ use std::{
     collections::{BTreeSet, VecDeque},
     time::Duration,
 };
-use tokio::time::{sleep, Instant};
+use tokio::time::{sleep, timeout, Instant};
 
 use crate::{
     file::FileContent,
@@ -23,6 +23,7 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 pub const TIMEOUT_MULTIPLIER: u32 = 5;
 pub const WRITE_FREQUENCY: usize = 8;
 pub const RECORD_DIR: &str = "record.toml";
+pub const MIN_TIMEOUT: Duration = Duration::from_nanos(1);
 
 #[derive(Debug)]
 pub struct Scheduler {
@@ -156,17 +157,23 @@ impl Scheduler {
     }
 
     pub async fn check_requests(&mut self) {
-        if let Some(result) = self.requests.next().await {
-            match result {
-                Ok((url_id, response_result)) => match response_result {
-                    Ok(response) => self.process_response(url_id, response).await,
-                    Err(err) => {
-                        error!("{url_id}: {err}.");
-                        self.fail(url_id)
-                    }
-                },
-                Err(err) => error!("Request: {}", err),
-            }
+        let result = match timeout(Duration::ZERO, self.requests.next()).await {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        let result = match result {
+            Some(r) => r,
+            None => return,
+        };
+        match result {
+            Ok((url_id, response_result)) => match response_result {
+                Ok(response) => self.process_response(url_id, response).await,
+                Err(err) => {
+                    error!("{url_id}: {err}.");
+                    self.fail(url_id)
+                }
+            },
+            Err(err) => error!("Request: {}", err),
         }
     }
 
