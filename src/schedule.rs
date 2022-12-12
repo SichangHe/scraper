@@ -178,17 +178,23 @@ impl Scheduler {
     }
 
     async fn check_processes(&mut self) {
-        if let Some(result) = self.processes.next().await {
-            match result {
-                Ok((url_id, process_result)) => match process_result {
-                    Ok(conclusion) => self.conclusions.push_back(conclusion),
-                    Err(err) => {
-                        error!("{url_id}: {err}.");
-                        self.fail(url_id)
-                    }
-                },
-                Err(err) => error!("Request: {}", err),
-            }
+        let result = match timeout(Duration::ZERO, self.processes.next()).await {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        let result = match result {
+            Some(r) => r,
+            None => return,
+        };
+        match result {
+            Ok((url_id, process_result)) => match process_result {
+                Ok(conclusion) => self.conclusions.push_back(conclusion),
+                Err(err) => {
+                    error!("{url_id}: {err}.");
+                    self.fail(url_id)
+                }
+            },
+            Err(err) => error!("Request: {}", err),
         }
     }
 
