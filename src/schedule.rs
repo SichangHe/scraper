@@ -13,7 +13,7 @@ use tokio::time::{sleep, Instant};
 use crate::{
     file::FileContent,
     io::{save_file, Writer},
-    middle::{double_unwrap, spawn_request, Conclusion, Process, Request},
+    middle::{spawn_process, spawn_request, Conclusion, Process, Request},
     ring::Ring,
     urls::Record,
 };
@@ -34,7 +34,7 @@ pub struct Scheduler {
     rec: Record,
     pending: VecDeque<usize>,
     requests: FuturesUnordered<Request>,
-    processes: Vec<Process>,
+    processes: FuturesUnordered<Process>,
     conclusions: VecDeque<Conclusion>,
     disregard_html: bool,
     disregard_other: bool,
@@ -56,7 +56,7 @@ impl Scheduler {
             rec: Record::default(),
             pending: VecDeque::new(),
             requests: FuturesUnordered::new(),
-            processes: Vec::new(),
+            processes: FuturesUnordered::new(),
             conclusions: VecDeque::new(),
             disregard_html: false,
             disregard_other: false,
@@ -171,24 +171,16 @@ impl Scheduler {
     }
 
     async fn check_processes(&mut self) {
-        let mut index = self.processes.len();
-        while index > 0 {
-            index -= 1;
-            self.check_one_process(&mut index).await;
-        }
-    }
-
-    async fn check_one_process(&mut self, index: &mut usize) {
-        if !self.processes[*index].handle.is_finished() {
-            return;
-        }
-        let Process { url_id, handle } = self.processes.remove(*index);
-        *index = index.saturating_sub(1);
-        match double_unwrap(handle).await {
-            Ok(conclusion) => self.conclusions.push_back(conclusion),
-            Err(err) => {
-                error!("{url_id}: {err}.");
-                self.fail(url_id);
+        if let Some(result) = self.processes.next().await {
+            match result {
+                Ok((url_id, process_result)) => match process_result {
+                    Ok(conclusion) => self.conclusions.push_back(conclusion),
+                    Err(err) => {
+                        error!("{url_id}: {err}.");
+                        self.fail(url_id)
+                    }
+                },
+                Err(err) => error!("Request: {}", err),
             }
         }
     }
@@ -200,7 +192,7 @@ impl Scheduler {
         };
         debug!("Processing {final_url_id}.");
         self.processes
-            .push(Process::spawn(final_url_id, response).await);
+            .push(spawn_process(final_url_id, response).await);
     }
 
     pub async fn process_one_conclusion(&mut self) {

@@ -18,10 +18,6 @@ pub async fn spawn_request(url_id: usize, request: RequestBuilder) -> Request {
     })
 }
 
-pub async fn double_unwrap<T>(handle: JoinHandle<Result<T>>) -> Result<T> {
-    handle.await?
-}
-
 async fn process_response(url_id: usize, response: Response) -> Result<Conclusion> {
     let status = response.status();
     if !status.is_success() {
@@ -53,19 +49,10 @@ fn clean_url(url: &Url) -> String {
     url.to_string().split('#').next().unwrap().to_owned()
 }
 
-#[derive(Debug)]
-pub struct Process {
-    pub url_id: usize,
-    pub handle: JoinHandle<Result<Conclusion>>,
-}
+pub type Process = JoinHandle<(usize, Result<Conclusion>)>;
 
-impl Process {
-    pub async fn spawn(url_id: usize, response: Response) -> Self {
-        Self {
-            url_id,
-            handle: spawn(process_response(url_id, response)),
-        }
-    }
+pub async fn spawn_process(url_id: usize, response: Response) -> Process {
+    spawn(async move { (url_id, process_response(url_id, response).await) })
 }
 
 #[derive(Debug)]
