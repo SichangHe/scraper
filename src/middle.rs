@@ -4,22 +4,18 @@ use tokio::{spawn, task::JoinHandle};
 
 use crate::file::{links_from_html, process_headers, FileContent, FileType};
 
-#[derive(Debug)]
-pub struct Request {
-    pub url_id: usize,
-    pub handle: JoinHandle<Result<Response>>,
-}
+pub type Request = JoinHandle<(usize, Result<Response>)>;
 
-impl Request {
-    pub async fn spawn(url_id: usize, request: RequestBuilder) -> Self {
-        Self {
+pub async fn spawn_request(url_id: usize, request: RequestBuilder) -> Request {
+    spawn(async move {
+        (
             url_id,
-            handle: spawn(async {
-                let response = request.send().await?;
-                Ok(response)
-            }),
-        }
-    }
+            match request.send().await {
+                Ok(response) => Ok(response),
+                Err(err) => Err(Error::from(err)),
+            },
+        )
+    })
 }
 
 pub async fn double_unwrap<T>(handle: JoinHandle<Result<T>>) -> Result<T> {

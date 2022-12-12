@@ -1,6 +1,6 @@
 use anyhow::Result;
 use bytes::Bytes;
-use futures::{stream::FuturesUnordered, Future, StreamExt};
+use futures::{stream::FuturesUnordered, StreamExt};
 use log::{debug, error, info};
 use regex::Regex;
 use reqwest::{Client, Response, Url};
@@ -13,7 +13,7 @@ use tokio::time::{sleep, Instant};
 use crate::{
     file::FileContent,
     io::{save_file, Writer},
-    middle::{double_unwrap, Conclusion, Process, Request},
+    middle::{double_unwrap, spawn_request, Conclusion, Process, Request},
     ring::Ring,
     urls::Record,
 };
@@ -33,7 +33,7 @@ pub struct Scheduler {
     blacklist: Regex,
     rec: Record,
     pending: VecDeque<usize>,
-    requests: FuturesUnordered<Box<dyn Future<Output = Request>>>,
+    requests: FuturesUnordered<Request>,
     processes: Vec<Process>,
     conclusions: VecDeque<Conclusion>,
     disregard_html: bool,
@@ -151,35 +151,23 @@ impl Scheduler {
         let url = self.rec.url_ids.get(&url_id).unwrap().to_owned();
         info!("Requesting {url_id} | {url}.");
         self.requests
-            .push(Request::spawn(url_id, self.client.get(url)).await);
+            .push(spawn_request(url_id, self.client.get(url)).await);
         true
     }
 
     pub async fn check_requests(&mut self) {
-        if let Some(Request { url_id, handle }) = self.requests.next().await {
-            match double_unwrap(handle).await {
-                Ok(response) => self.process_response(url_id, response).await,
-                Err(err) => {
-                    error!("{url_id}: {err}.");
-                    self.fail(url_id);
-                }
-            };
-        }
-    }
-
-    async fn check_one_request(&mut self, index: &mut usize) {
-        if !self.requests[*index].handle.is_finished() {
-            return;
-        }
-        let Request { url_id, handle } = self.requests.remove(*index);
-        *index = index.saturating_sub(1);
-        match double_unwrap(handle).await {
-            Ok(response) => self.process_response(url_id, response).await,
-            Err(err) => {
-                error!("{url_id}: {err}.");
-                self.fail(url_id);
+        if let Some(result) = self.requests.next().await {
+            match result {
+                Ok((url_id, response_result)) => match response_result {
+                    Ok(response) => self.process_response(url_id, response).await,
+                    Err(err) => {
+                        error!("{url_id}: {err}.");
+                        self.fail(url_id)
+                    }
+                },
+                Err(err) => error!("Request: {}", err),
             }
-        };
+        }
     }
 
     async fn check_processes(&mut self) {
