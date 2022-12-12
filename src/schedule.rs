@@ -157,13 +157,17 @@ impl Scheduler {
     }
 
     pub async fn check_requests(&mut self) {
+        while self.check_one_request().await {}
+    }
+
+    pub async fn check_one_request(&mut self) -> bool {
         let result = match timeout(Duration::ZERO, self.requests.next()).await {
             Ok(r) => r,
-            Err(_) => return,
+            Err(_) => return false,
         };
         let result = match result {
             Some(r) => r,
-            None => return,
+            None => return false,
         };
         match result {
             Ok((url_id, response_result)) => match response_result {
@@ -175,16 +179,21 @@ impl Scheduler {
             },
             Err(err) => error!("Request: {}", err),
         }
+        true
     }
 
-    async fn check_processes(&mut self) {
+    pub async fn check_processes(&mut self) {
+        while self.check_one_process().await {}
+    }
+
+    pub async fn check_one_process(&mut self) -> bool {
         let result = match timeout(Duration::ZERO, self.processes.next()).await {
             Ok(r) => r,
-            Err(_) => return,
+            Err(_) => return false,
         };
         let result = match result {
             Some(r) => r,
-            None => return,
+            None => return false,
         };
         match result {
             Ok((url_id, process_result)) => match process_result {
@@ -196,6 +205,7 @@ impl Scheduler {
             },
             Err(err) => error!("Request: {}", err),
         }
+        true
     }
 
     async fn process_response(&mut self, url_id: usize, response: Response) {
