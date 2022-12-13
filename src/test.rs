@@ -5,7 +5,13 @@ use regex::Regex;
 use reqwest::{Client, Url};
 use tokio::time::sleep;
 
-use crate::{io::save_file, middle::spawn_request, schedule::Scheduler, urls::Record};
+use crate::{
+    config::SchedulerConfig,
+    io::save_file,
+    middle::spawn_request,
+    schedule::{default_client, Scheduler},
+    urls::Record,
+};
 
 #[tokio::test]
 async fn reqwest_test() -> Result<()> {
@@ -40,11 +46,7 @@ fn url_slash_test() {
 
 #[tokio::test]
 async fn request_test() -> Result<()> {
-    let request = spawn_request(
-        0,
-        Scheduler::default_client()?.get("https://www.rust-lang.org"),
-    )
-    .await;
+    let request = spawn_request(0, default_client().get("https://www.rust-lang.org")).await;
     dbg!(&request);
     while !request.is_finished() {
         println!("Request hasn't finished.");
@@ -58,7 +60,7 @@ async fn request_test() -> Result<()> {
 
 #[tokio::test]
 async fn scheduler_test() -> Result<()> {
-    let mut scheduler = Scheduler::new()?;
+    let mut scheduler = Scheduler::default();
     scheduler.add_pending(Url::parse("https://www.rust-lang.org")?);
     scheduler.spawn_one_request().await;
     scheduler.finish().await;
@@ -68,8 +70,10 @@ async fn scheduler_test() -> Result<()> {
 
 #[tokio::test]
 async fn scheduler_recursion_test() -> Result<()> {
-    let mut scheduler =
-        Scheduler::new()?.filter(Regex::new(r"https://sites.duke.edu/intersections/.*").unwrap());
+    let mut scheduler = Scheduler::new(
+        SchedulerConfig::default()
+            .filter(Regex::new(r"https://sites.duke.edu/intersections/.*").unwrap()),
+    );
     scheduler.add_pending(Url::parse("https://sites.duke.edu/intersections/")?);
     scheduler.recursion().await;
     Ok(())
@@ -77,7 +81,7 @@ async fn scheduler_recursion_test() -> Result<()> {
 
 #[tokio::test]
 async fn process_header_test() -> Result<()> {
-    let response = Scheduler::default_client()?
+    let response = default_client()
         .get("https://www.rust-lang.org")
         .send()
         .await?;

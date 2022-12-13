@@ -3,7 +3,10 @@ use std::time::Duration;
 use anyhow::Result;
 use clap::Parser;
 use log::debug;
-use recursive_scraper::schedule::{Scheduler, DEFAULT_TIMEOUT};
+use recursive_scraper::{
+    config::SchedulerConfig,
+    schedule::{client_with_timeout, Scheduler, DEFAULT_TIMEOUT},
+};
 use regex::Regex;
 use reqwest::Url;
 
@@ -20,38 +23,39 @@ async fn main() -> Result<()> {
         Some(timeout) => Duration::from_millis(timeout),
         None => DEFAULT_TIMEOUT,
     };
-    let client = Scheduler::client_with_timeout(timeout)?;
-    let mut scheduler = Scheduler::from_client(client);
+    let client = client_with_timeout(timeout);
+    let mut cfg = SchedulerConfig::default();
     if let Some(blacklist) = args.blacklist {
         let blacklist = Regex::new(&blacklist)?;
-        scheduler = scheduler.blacklist(blacklist);
+        cfg = cfg.blacklist(blacklist);
     }
     if let Some(filter) = args.filter {
         let filter = Regex::new(&filter)?;
-        scheduler = scheduler.filter(filter);
+        cfg = cfg.filter(filter);
     }
     if let Some(delay) = args.delay {
         let delay = Duration::from_millis(delay);
-        scheduler = scheduler.delay(delay);
+        cfg = cfg.delay(delay);
     }
     if let Some(html_dir) = args.html_dir {
-        scheduler = scheduler.html_dir(html_dir);
+        cfg = cfg.html_dir(html_dir);
     }
     if let Some(other_dir) = args.other_dir {
-        scheduler = scheduler.other_dir(other_dir);
+        cfg = cfg.other_dir(other_dir);
     }
     if let Some(log_dir) = args.log_dir {
-        scheduler = scheduler.log_dir(log_dir)
+        cfg = cfg.log_dir(log_dir)
     }
     if args.disregard_html {
-        scheduler = scheduler.disregard_html();
+        cfg = cfg.disregard_html();
     }
     if args.disregard_other {
-        scheduler = scheduler.disregard_other();
+        cfg = cfg.disregard_other();
     }
     if let Some(number_of_rings) = args.number_of_rings {
-        scheduler = scheduler.with_number_of_rings(number_of_rings);
+        cfg = cfg.with_number_of_rings(number_of_rings);
     }
+    let mut scheduler = Scheduler::from_client(client, cfg);
 
     for url in start_urls {
         scheduler.add_pending(url);

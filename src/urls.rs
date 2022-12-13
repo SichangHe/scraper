@@ -49,6 +49,15 @@ impl Record {
         self.scrapes.insert(final_url_id);
         Some(final_url_id)
     }
+
+    pub fn lens(&self) -> (usize, usize, usize, usize) {
+        (
+            self.urls.len(),
+            self.scrapes.len(),
+            self.fails.len(),
+            self.redirects.len(),
+        )
+    }
 }
 
 impl Serialize for Record {

@@ -2,7 +2,7 @@ use anyhow::Result;
 use bytes::Bytes;
 use futures::{stream::FuturesUnordered, StreamExt};
 use log::{debug, error, info};
-use regex::Regex;
+
 use reqwest::{Client, Response, Url};
 use std::{
     collections::{BTreeSet, VecDeque},
@@ -11,127 +11,70 @@ use std::{
 use tokio::time::{sleep, timeout, Instant};
 
 use crate::{
+    config::SchedulerConfig,
     file::FileContent,
     io::{save_file, Writer},
     middle::{spawn_process, spawn_request, Conclusion, Process, Request},
-    ring::Ring,
     urls::Record,
 };
 
-pub const DEFAULT_DELAY: Duration = Duration::from_millis(500);
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 pub const TIMEOUT_MULTIPLIER: u32 = 5;
 pub const WRITE_FREQUENCY: usize = 8;
 pub const RECORD_DIR: &str = "record.toml";
-pub const MIN_TIMEOUT: Duration = Duration::from_nanos(1);
+
+pub fn client_with_timeout(timeout: Duration) -> Client {
+    Client::builder()
+        .connect_timeout(timeout)
+        .timeout(timeout * TIMEOUT_MULTIPLIER)
+        .build()
+        .expect("Failed to build the client.")
+}
+
+pub fn default_client() -> Client {
+    client_with_timeout(DEFAULT_TIMEOUT)
+}
 
 #[derive(Debug)]
 pub struct Scheduler {
+    cfg: SchedulerConfig,
     time: Instant,
-    delay: Duration,
     client: Client,
-    filter: Regex,
-    blacklist: Regex,
     rec: Record,
     pending: VecDeque<usize>,
     requests: FuturesUnordered<Request>,
     processes: FuturesUnordered<Process>,
     conclusions: VecDeque<Conclusion>,
-    disregard_html: bool,
-    disregard_other: bool,
-    html_dir: String,
-    other_dir: String,
-    log_dir: String,
     writer: Option<Writer>,
-    ring: Option<Ring>,
+}
+
+impl Default for Scheduler {
+    fn default() -> Self {
+        Self::new(SchedulerConfig::default())
+    }
 }
 
 impl Scheduler {
-    pub fn from_client(client: Client) -> Self {
+    pub fn from_client(client: Client, cfg: SchedulerConfig) -> Self {
         Self {
+            cfg,
             time: Instant::now(),
-            delay: DEFAULT_DELAY,
             client,
-            filter: Regex::new(".*").unwrap(),
-            blacklist: Regex::new("#").unwrap(),
             rec: Record::default(),
             pending: VecDeque::new(),
             requests: FuturesUnordered::new(),
             processes: FuturesUnordered::new(),
             conclusions: VecDeque::new(),
-            disregard_html: false,
-            disregard_other: false,
-            html_dir: "html".to_owned(),
-            other_dir: "other".to_owned(),
-            log_dir: "log".to_owned(),
             writer: None,
-            ring: None,
         }
     }
 
-    pub fn delay(self, delay: Duration) -> Self {
-        Self { delay, ..self }
-    }
-
-    pub fn default_client() -> reqwest::Result<Client> {
-        Self::client_with_timeout(DEFAULT_TIMEOUT)
-    }
-
-    pub fn client_with_timeout(timeout: Duration) -> reqwest::Result<Client> {
-        Client::builder()
-            .connect_timeout(timeout)
-            .timeout(timeout * TIMEOUT_MULTIPLIER)
-            .build()
-    }
-
-    pub fn new() -> Result<Self> {
-        let scheduler = Self::from_client(Self::default_client()?);
-        Ok(scheduler)
-    }
-
-    pub fn filter(self, filter: Regex) -> Self {
-        Self { filter, ..self }
-    }
-
-    pub fn blacklist(self, blacklist: Regex) -> Self {
-        Self { blacklist, ..self }
-    }
-
-    pub fn disregard_html(self) -> Self {
-        Self {
-            disregard_html: true,
-            ..self
-        }
-    }
-
-    pub fn disregard_other(self) -> Self {
-        Self {
-            disregard_other: true,
-            ..self
-        }
-    }
-
-    pub fn html_dir(self, html_dir: String) -> Self {
-        Self { html_dir, ..self }
-    }
-
-    pub fn other_dir(self, other_dir: String) -> Self {
-        Self { other_dir, ..self }
-    }
-
-    pub fn log_dir(self, log_dir: String) -> Self {
-        Self { log_dir, ..self }
-    }
-
-    pub fn with_number_of_rings(self, number_of_rings: u8) -> Self {
-        Self {
-            ring: Some(Ring::new(number_of_rings)),
-            ..self
-        }
+    pub fn new(cfg: SchedulerConfig) -> Self {
+        Self::from_client(default_client(), cfg)
     }
 
     pub fn delaying_requests(&self) -> bool {
-        self.time.elapsed() < self.delay
+        self.time.elapsed() < self.cfg.delay
     }
 
     pub fn add_pending(&mut self, url: Url) {
@@ -141,7 +84,7 @@ impl Scheduler {
     }
 
     pub fn add_next_pending(&mut self, url: Url) {
-        if let Some(ref mut ring) = self.ring {
+        if let Some(ref mut ring) = self.cfg.ring {
             if let Ok(index) = self.rec.check_add_url(url) {
                 ring.next.push_back(index);
             }
@@ -255,8 +198,8 @@ impl Scheduler {
     ) -> Result<()> {
         for href in hrefs {
             let href_str = href.as_str();
-            if !self.blacklist.is_match(href_str) {
-                if self.filter.is_match(href_str) {
+            if !self.cfg.blacklist.is_match(href_str) {
+                if self.cfg.filter.is_match(href_str) {
                     self.add_pending(href);
                 } else {
                     self.add_next_pending(href);
@@ -265,23 +208,31 @@ impl Scheduler {
                 _ = self.rec.check_add_url(href)
             }
         }
-        if !self.disregard_other {
+        if !self.cfg.disregard_other {
             for img in imgs {
                 // Not filtering images.
                 self.add_pending(img);
             }
         }
-        if !self.disregard_html {
-            save_file(&format!("{}/{url_id}.html", self.html_dir), text.as_bytes()).await?;
+        if !self.cfg.disregard_html {
+            save_file(
+                &format!("{}/{url_id}.html", self.cfg.html_dir),
+                text.as_bytes(),
+            )
+            .await?;
         }
         Ok(())
     }
 
     async fn process_other(&mut self, url_id: usize, extension: &str, bytes: Bytes) -> Result<()> {
-        if self.disregard_other {
+        if self.cfg.disregard_other {
             return Ok(());
         }
-        save_file(&format!("{}/{url_id}{extension}", self.other_dir), &bytes).await?;
+        save_file(
+            &format!("{}/{url_id}{extension}", self.cfg.other_dir),
+            &bytes,
+        )
+        .await?;
         Ok(())
     }
 
@@ -294,21 +245,12 @@ impl Scheduler {
         )
     }
 
-    fn rec_lens(&self) -> (usize, usize, usize, usize) {
-        (
-            self.rec.urls.len(),
-            self.rec.scrapes.len(),
-            self.rec.fails.len(),
-            self.rec.redirects.len(),
-        )
-    }
-
     /// Recursively scrape until there are no more pending URLs.
     pub async fn recursion(&mut self) {
         self.time = Instant::now();
         let (mut pending_len, mut requests_len, mut processes_len, mut conclusions_len) =
             self.vec_lens();
-        let (mut urls_len, mut scrapes_len, mut fails_len, mut redirects_len) = self.rec_lens();
+        let (mut urls_len, mut scrapes_len, mut fails_len, mut redirects_len) = self.rec.lens();
         let mut changes: usize = 0;
         while !self.pending.is_empty()
             || !self.requests.is_empty()
@@ -334,7 +276,7 @@ impl Scheduler {
                 || redirects_len != self.rec.redirects.len()
             {
                 changes += 1;
-                (urls_len, scrapes_len, fails_len, redirects_len) = self.rec_lens();
+                (urls_len, scrapes_len, fails_len, redirects_len) = self.rec.lens();
                 if changes % WRITE_FREQUENCY == 0 {
                     self.write().await;
                 }
@@ -345,7 +287,7 @@ impl Scheduler {
     }
 
     fn increment_ring(&mut self) -> bool {
-        if let Some(ref mut ring) = self.ring {
+        if let Some(ref mut ring) = self.cfg.ring {
             if let Some(pending) = ring.increment() {
                 self.pending = pending;
                 return true;
@@ -362,12 +304,12 @@ impl Scheduler {
         self.check_spawn_request().await;
         self.process_conclusions().await;
         self.check_spawn_request().await;
-        sleep(self.delay.saturating_sub(self.time.elapsed())).await;
+        sleep(self.cfg.delay.saturating_sub(self.time.elapsed())).await;
     }
 
     async fn check_spawn_request(&mut self) {
         if !self.delaying_requests() && self.spawn_one_request().await {
-            self.time += self.delay;
+            self.time += self.cfg.delay;
         }
     }
 
@@ -382,8 +324,8 @@ impl Scheduler {
             self.check_requests().await;
             self.check_processes().await;
             self.process_one_conclusion().await;
-            sleep(self.delay.saturating_sub(self.time.elapsed())).await;
-            self.time += self.delay;
+            sleep(self.cfg.delay.saturating_sub(self.time.elapsed())).await;
+            self.time += self.cfg.delay;
         }
         self.write_all().await;
     }
@@ -402,7 +344,7 @@ impl Scheduler {
         }
         self.writer = Some(
             Writer::spawn(
-                format!("{}/{RECORD_DIR}", self.log_dir),
+                format!("{}/{RECORD_DIR}", self.cfg.log_dir),
                 toml::to_string_pretty(&self.rec).unwrap(),
             )
             .await,
