@@ -130,6 +130,10 @@ impl Scheduler {
         }
     }
 
+    pub fn delaying_requests(&self) -> bool {
+        self.time.elapsed() < self.delay
+    }
+
     pub fn add_pending(&mut self, url: Url) {
         if let Ok(index) = self.rec.check_add_url(url) {
             self.pending.push_back(index);
@@ -157,7 +161,7 @@ impl Scheduler {
     }
 
     pub async fn check_requests(&mut self) {
-        while self.check_one_request().await {}
+        while self.check_one_request().await && self.delaying_requests() {}
     }
 
     pub async fn check_one_request(&mut self) -> bool {
@@ -183,7 +187,7 @@ impl Scheduler {
     }
 
     pub async fn check_processes(&mut self) {
-        while self.check_one_process().await {}
+        while self.check_one_process().await && self.delaying_requests() {}
     }
 
     pub async fn check_one_process(&mut self) -> bool {
@@ -218,16 +222,15 @@ impl Scheduler {
             .push(spawn_process(final_url_id, response).await);
     }
 
-    pub async fn process_one_conclusion(&mut self) {
-        let conclusion = {
-            if let Some(conclusion) = self.conclusions.pop_front() {
-                conclusion
-            } else {
-                // No conclusions pending.
-                return;
-            }
+    pub async fn process_conclusions(&mut self) {
+        while self.process_one_conclusion().await && self.delaying_requests() {}
+    }
+
+    pub async fn process_one_conclusion(&mut self) -> bool {
+        let Conclusion { url_id, content } = match self.conclusions.pop_front() {
+            Some(conclusion) => conclusion,
+            None => return false, // No conclusions pending.
         };
-        let Conclusion { url_id, content } = conclusion;
         match content {
             FileContent::Html(text, hrefs, imgs) => {
                 self.process_html(url_id, text, hrefs, imgs).await
@@ -240,6 +243,7 @@ impl Scheduler {
             error!("{url_id}: {err}.");
             self.fail(url_id);
         });
+        true
     }
 
     async fn process_html(
@@ -356,12 +360,13 @@ impl Scheduler {
         self.check_spawn_request().await;
         self.check_processes().await;
         self.check_spawn_request().await;
-        self.process_one_conclusion().await;
+        self.process_conclusions().await;
+        self.check_spawn_request().await;
         sleep(self.delay.saturating_sub(self.time.elapsed())).await;
     }
 
     async fn check_spawn_request(&mut self) {
-        if self.time.elapsed() >= self.delay && self.spawn_one_request().await {
+        if !self.delaying_requests() && self.spawn_one_request().await {
             self.time += self.delay;
         }
     }
