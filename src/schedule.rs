@@ -229,26 +229,21 @@ impl Scheduler {
     /// Recursively scrape until there are no more pending URLs.
     pub async fn recursion(&mut self) {
         self.s.time = Instant::now();
-        let (mut pending_len, mut requests_len, mut processes_len, mut conclusions_len) =
-            self.s.lens();
-        let (mut urls_len, mut scrapes_len, mut fails_len, mut redirects_len) = self.rec.lens();
+        let mut state_lens = self.s.lens();
+        let mut record_lens = self.rec.lens();
         let mut changes: usize = 0;
         while self.s.has_more_tasks() || self.increment_ring() {
             self.one_cycle().await;
-            if (pending_len, requests_len, processes_len, conclusions_len) != self.s.lens() {
-                (pending_len, requests_len, processes_len, conclusions_len) = self.s.lens();
+            if state_lens != self.s.lens() {
+                state_lens = self.s.lens();
                 debug!(
                     "{} pending, {} requests, {} processes, {} conclusions.",
-                    pending_len, requests_len, processes_len, conclusions_len
+                    state_lens.0, state_lens.1, state_lens.2, state_lens.3
                 );
             }
-            if urls_len != self.rec.urls.len()
-                || scrapes_len != self.rec.scrapes.len()
-                || fails_len != self.rec.fails.len()
-                || redirects_len != self.rec.redirects.len()
-            {
+            if record_lens != self.rec.lens() {
                 changes += 1;
-                (urls_len, scrapes_len, fails_len, redirects_len) = self.rec.lens();
+                record_lens = self.rec.lens();
                 if changes % WRITE_FREQUENCY == 0 {
                     self.write().await;
                 }
