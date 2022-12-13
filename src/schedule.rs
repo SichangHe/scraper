@@ -1,20 +1,18 @@
 use anyhow::Result;
 use bytes::Bytes;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::StreamExt;
 use log::{debug, error, info};
 
 use reqwest::{Client, Response, Url};
-use std::{
-    collections::{BTreeSet, VecDeque},
-    time::Duration,
-};
+use std::{collections::BTreeSet, time::Duration};
 use tokio::time::{sleep, timeout, Instant};
 
 use crate::{
     config::SchedulerConfig,
     file::FileContent,
     io::{save_file, Writer},
-    middle::{spawn_process, spawn_request, Conclusion, Process, Request},
+    middle::{spawn_process, spawn_request, Conclusion},
+    state::SchedulerState,
     urls::Record,
 };
 
@@ -38,14 +36,9 @@ pub fn default_client() -> Client {
 #[derive(Debug)]
 pub struct Scheduler {
     cfg: SchedulerConfig,
-    time: Instant,
     client: Client,
     rec: Record,
-    pending: VecDeque<usize>,
-    requests: FuturesUnordered<Request>,
-    processes: FuturesUnordered<Process>,
-    conclusions: VecDeque<Conclusion>,
-    writer: Option<Writer>,
+    s: SchedulerState,
 }
 
 impl Default for Scheduler {
@@ -58,14 +51,9 @@ impl Scheduler {
     pub fn from_client(client: Client, cfg: SchedulerConfig) -> Self {
         Self {
             cfg,
-            time: Instant::now(),
             client,
             rec: Record::default(),
-            pending: VecDeque::new(),
-            requests: FuturesUnordered::new(),
-            processes: FuturesUnordered::new(),
-            conclusions: VecDeque::new(),
-            writer: None,
+            s: SchedulerState::default(),
         }
     }
 
@@ -74,12 +62,12 @@ impl Scheduler {
     }
 
     pub fn delaying_requests(&self) -> bool {
-        self.time.elapsed() < self.cfg.delay
+        self.s.time.elapsed() < self.cfg.delay
     }
 
     pub fn add_pending(&mut self, url: Url) {
         if let Ok(index) = self.rec.check_add_url(url) {
-            self.pending.push_back(index);
+            self.s.pending.push_back(index);
         }
     }
 
@@ -92,13 +80,14 @@ impl Scheduler {
     }
 
     pub async fn spawn_one_request(&mut self) -> bool {
-        let url_id = match self.pending.pop_front() {
+        let url_id = match self.s.pending.pop_front() {
             Some(url_id) => url_id,
             None => return false,
         };
         let url = self.rec.url_ids.get(&url_id).unwrap().to_owned();
         info!("Requesting {url_id} | {url}.");
-        self.requests
+        self.s
+            .requests
             .push(spawn_request(url_id, self.client.get(url)).await);
         true
     }
@@ -108,7 +97,7 @@ impl Scheduler {
     }
 
     pub async fn check_one_request(&mut self) -> bool {
-        let result = match timeout(Duration::ZERO, self.requests.next()).await {
+        let result = match timeout(Duration::ZERO, self.s.requests.next()).await {
             Ok(r) => r,
             Err(_) => return false,
         };
@@ -134,7 +123,7 @@ impl Scheduler {
     }
 
     pub async fn check_one_process(&mut self) -> bool {
-        let result = match timeout(Duration::ZERO, self.processes.next()).await {
+        let result = match timeout(Duration::ZERO, self.s.processes.next()).await {
             Ok(r) => r,
             Err(_) => return false,
         };
@@ -144,7 +133,7 @@ impl Scheduler {
         };
         match result {
             Ok((url_id, process_result)) => match process_result {
-                Ok(conclusion) => self.conclusions.push_back(conclusion),
+                Ok(conclusion) => self.s.conclusions.push_back(conclusion),
                 Err(err) => {
                     error!("{url_id}: {err}.");
                     self.fail(url_id)
@@ -161,7 +150,8 @@ impl Scheduler {
             None => return,
         };
         debug!("Processing {final_url_id}.");
-        self.processes
+        self.s
+            .processes
             .push(spawn_process(final_url_id, response).await);
     }
 
@@ -170,7 +160,7 @@ impl Scheduler {
     }
 
     pub async fn process_one_conclusion(&mut self) -> bool {
-        let Conclusion { url_id, content } = match self.conclusions.pop_front() {
+        let Conclusion { url_id, content } = match self.s.conclusions.pop_front() {
             Some(conclusion) => conclusion,
             None => return false, // No conclusions pending.
         };
@@ -236,35 +226,17 @@ impl Scheduler {
         Ok(())
     }
 
-    fn vec_lens(&self) -> (usize, usize, usize, usize) {
-        (
-            self.pending.len(),
-            self.requests.len(),
-            self.processes.len(),
-            self.conclusions.len(),
-        )
-    }
-
     /// Recursively scrape until there are no more pending URLs.
     pub async fn recursion(&mut self) {
-        self.time = Instant::now();
+        self.s.time = Instant::now();
         let (mut pending_len, mut requests_len, mut processes_len, mut conclusions_len) =
-            self.vec_lens();
+            self.s.lens();
         let (mut urls_len, mut scrapes_len, mut fails_len, mut redirects_len) = self.rec.lens();
         let mut changes: usize = 0;
-        while !self.pending.is_empty()
-            || !self.requests.is_empty()
-            || !self.processes.is_empty()
-            || !self.conclusions.is_empty()
-            || self.increment_ring()
-        {
+        while self.s.has_more_tasks() || self.increment_ring() {
             self.one_cycle().await;
-            if pending_len != self.pending.len()
-                || requests_len != self.requests.len()
-                || processes_len != self.processes.len()
-                || conclusions_len != self.conclusions.len()
-            {
-                (pending_len, requests_len, processes_len, conclusions_len) = self.vec_lens();
+            if (pending_len, requests_len, processes_len, conclusions_len) != self.s.lens() {
+                (pending_len, requests_len, processes_len, conclusions_len) = self.s.lens();
                 debug!(
                     "{} pending, {} requests, {} processes, {} conclusions.",
                     pending_len, requests_len, processes_len, conclusions_len
@@ -289,7 +261,7 @@ impl Scheduler {
     fn increment_ring(&mut self) -> bool {
         if let Some(ref mut ring) = self.cfg.ring {
             if let Some(pending) = ring.increment() {
-                self.pending = pending;
+                self.s.pending = pending;
                 return true;
             }
         }
@@ -304,28 +276,25 @@ impl Scheduler {
         self.check_spawn_request().await;
         self.process_conclusions().await;
         self.check_spawn_request().await;
-        sleep(self.cfg.delay.saturating_sub(self.time.elapsed())).await;
+        sleep(self.cfg.delay.saturating_sub(self.s.time.elapsed())).await;
     }
 
     async fn check_spawn_request(&mut self) {
         if !self.delaying_requests() && self.spawn_one_request().await {
-            self.time += self.cfg.delay;
+            self.s.time += self.cfg.delay;
         }
     }
 
     /// Tell the scheduler to finish whatever is already started
     /// and do not initiate any more requests.
     pub async fn finish(&mut self) {
-        self.time = Instant::now();
-        while !self.requests.is_empty()
-            || !self.processes.is_empty()
-            || !self.conclusions.is_empty()
-        {
+        self.s.time = Instant::now();
+        while self.s.has_processing() {
             self.check_requests().await;
             self.check_processes().await;
             self.process_one_conclusion().await;
-            sleep(self.cfg.delay.saturating_sub(self.time.elapsed())).await;
-            self.time += self.cfg.delay;
+            sleep(self.cfg.delay.saturating_sub(self.s.time.elapsed())).await;
+            self.s.time += self.cfg.delay;
         }
         self.write_all().await;
     }
@@ -335,14 +304,14 @@ impl Scheduler {
             return;
         }
         self.rec.fails.insert(url_id);
-        self.pending.push_back(url_id);
+        self.s.pending.push_back(url_id);
     }
 
     async fn write(&mut self) {
         {
-            let _ = self.writer.take();
+            let _ = self.s.writer.take();
         }
-        self.writer = Some(
+        self.s.writer = Some(
             Writer::spawn(
                 format!("{}/{RECORD_DIR}", self.cfg.log_dir),
                 toml::to_string_pretty(&self.rec).unwrap(),
@@ -354,7 +323,7 @@ impl Scheduler {
     async fn write_all(&mut self) {
         for _ in 0..8 {
             self.write().await;
-            let writer = self.writer.take().unwrap();
+            let writer = self.s.writer.take().unwrap();
             if let Err(err) = writer.wait().await {
                 error!("Write all: {err}.");
                 sleep(Duration::from_secs(1)).await;
