@@ -48,5 +48,4 @@ impl SchedulerState {
             self.conclusions.len(),
         )
     }
-
 }

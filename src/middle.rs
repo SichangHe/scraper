@@ -18,7 +18,7 @@ pub async fn spawn_request(url_id: usize, request: RequestBuilder) -> Request {
     })
 }
 
-async fn process_response(url_id: usize, response: Response) -> Result<Conclusion> {
+async fn process_response(response: Response) -> Result<FileContent> {
     let status = response.status();
     if !status.is_success() {
         return Err(Error::msg(format!("status code error: {status}")));
@@ -42,17 +42,17 @@ async fn process_response(url_id: usize, response: Response) -> Result<Conclusio
                 .unwrap();
         content = FileContent::Other(extension, response.bytes().await?);
     }
-    Ok(Conclusion { url_id, content })
+    Ok(content)
 }
 
 fn clean_url(url: &Url) -> String {
     url.to_string().split('#').next().unwrap().to_owned()
 }
 
-pub type Process = JoinHandle<(usize, Result<Conclusion>)>;
+pub type Process = JoinHandle<(usize, Result<FileContent>)>;
 
 pub async fn spawn_process(url_id: usize, response: Response) -> Process {
-    spawn(async move { (url_id, process_response(url_id, response).await) })
+    spawn(async move { (url_id, process_response(response).await) })
 }
 
 #[derive(Debug)]

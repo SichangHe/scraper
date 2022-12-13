@@ -133,7 +133,7 @@ impl Scheduler {
         };
         match result {
             Ok((url_id, process_result)) => match process_result {
-                Ok(conclusion) => self.s.conclusions.push_back(conclusion),
+                Ok(content) => self.s.conclusions.push_back(Conclusion { url_id, content }),
                 Err(err) => {
                     error!("{url_id}: {err}.");
                     self.fail(url_id)

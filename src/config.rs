@@ -78,5 +78,4 @@ impl SchedulerConfig {
             ..self
         }
     }
-
 }
