@@ -15,7 +15,7 @@ pub fn process_headers(headers: &HeaderMap) -> Result<FileType> {
         Some(value) => value.to_str()?,
         None => return Ok(FileType::Other),
     };
-    Ok(if content.contains(&"text/html") {
+    Ok(if content.contains("text/html") {
         FileType::Html
     } else {
         FileType::Other
